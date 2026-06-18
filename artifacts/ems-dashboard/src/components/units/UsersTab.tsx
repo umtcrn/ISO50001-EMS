@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useAuth } from "@/context/AuthContext";
+import { useCompany } from "@/context/CompanyContext";
 import { useListUnits, getListUnitsQueryKey } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -27,17 +28,24 @@ const API = (token: string | null, method: string, body?: unknown, id?: number) 
 
 export default function UsersTab({ unitFilter }: { unitFilter?: number }) {
   const { token } = useAuth();
+  const { companyId } = useCompany();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState<UserForm>(EMPTY);
 
-  const { data: allUnits } = useListUnits({ query: { queryKey: getListUnitsQueryKey() } });
-  const qKey = ["users"];
+  const { data: allUnits } = useListUnits({ query: { queryKey: [...getListUnitsQueryKey(), companyId] } });
+  const qKey = ["users", companyId];
   const { data: allUsers, isLoading } = useQuery<UserRecord[]>({
     queryKey: qKey,
-    queryFn: () => fetch("/api/users", { headers: token ? { Authorization: `Bearer ${token}` } : {} }).then(r => r.json()),
+    queryFn: () => {
+      const params = new URLSearchParams();
+      if (companyId !== null) params.set("companyId", companyId.toString());
+      const qs = params.toString();
+      const url = qs ? `/api/users?${qs}` : "/api/users";
+      return fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : {} }).then(r => r.json());
+    },
   });
   const users = unitFilter !== undefined
     ? (allUsers ?? []).filter(u => u.unitId === unitFilter || u.role === "admin" || u.role === "superadmin")

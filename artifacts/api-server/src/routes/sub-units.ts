@@ -5,15 +5,27 @@ import { requireAuth } from "../middlewares/auth.js";
 
 const router = Router();
 
-// GET /api/sub-units?unitId=1
+// GET /api/sub-units?unitId=1&companyId=1
 router.get("/sub-units", requireAuth, async (req, res) => {
   try {
+    const role = req.user!.role;
     const unitId = req.query.unitId ? parseInt(req.query.unitId as string) : undefined;
+    const companyId = req.query.companyId ? parseInt(req.query.companyId as string) : undefined;
 
-    if (req.user!.role !== "admin" && req.user!.unitId !== null) {
-      const effectiveUnitId = req.user!.unitId;
+    if (role !== "admin" && role !== "superadmin" && req.user!.unitId !== null) {
       const rows = await db.select().from(subUnitsTable)
-        .where(eq(subUnitsTable.unitId, effectiveUnitId))
+        .where(eq(subUnitsTable.unitId, req.user!.unitId!))
+        .orderBy(subUnitsTable.name);
+      res.json(rows);
+      return;
+    }
+
+    if (role === "superadmin" && companyId !== undefined) {
+      const rows = await db.select().from(subUnitsTable)
+        .where(and(
+          eq(subUnitsTable.companyId, companyId),
+          ...(unitId !== undefined ? [eq(subUnitsTable.unitId, unitId)] : [])
+        ))
         .orderBy(subUnitsTable.name);
       res.json(rows);
       return;

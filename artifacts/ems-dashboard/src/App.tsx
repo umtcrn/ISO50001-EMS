@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { YearProvider } from "@/context/YearContext";
 import { UnitProvider } from "@/context/UnitContext";
+import { CompanyProvider } from "@/context/CompanyContext";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { Layout } from "@/components/Layout";
 import NotFound from "@/pages/not-found";
@@ -114,9 +115,11 @@ function App() {
       <TooltipProvider>
         <AuthProvider>
           <YearProvider>
-            <UnitProvider>
-              <AppInner />
-            </UnitProvider>
+            <CompanyProvider>
+              <UnitProvider>
+                <AppInner />
+              </UnitProvider>
+            </CompanyProvider>
           </YearProvider>
         </AuthProvider>
         <Toaster />

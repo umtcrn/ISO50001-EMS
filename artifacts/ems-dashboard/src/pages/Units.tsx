@@ -5,6 +5,7 @@ import {
 } from "@workspace/api-client-react";
 import { useAuth } from "@/context/AuthContext";
 import { useUnit } from "@/context/UnitContext";
+import { useCompany } from "@/context/CompanyContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -60,6 +61,7 @@ function AdminUnitsTab() {
   const { toast } = useToast();
   const { token } = useAuth();
   const { setUnitId } = useUnit();
+  const { companyId } = useCompany();
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState<UnitForm>(EMPTY);
@@ -118,7 +120,12 @@ function AdminUnitsTab() {
     }
   }
 
-  const { data: units, isLoading } = useListUnits({ query: { queryKey: getListUnitsQueryKey() } });
+  const unitsQKey = [...getListUnitsQueryKey(), companyId];
+  const unitsParams = companyId !== null ? { companyId } : {};
+  const { data: units, isLoading } = useListUnits(
+    unitsParams as any,
+    { query: { queryKey: unitsQKey } }
+  );
   const createUnit = useCreateUnit();
   const updateUnit = useUpdateUnit();
   const deleteUnit = useDeleteUnit();
@@ -132,15 +139,15 @@ function AdminUnitsTab() {
 
   function handleSave() {
     if (!form.name || !form.location) { toast({ title: "Ad ve lokasyon zorunludur", variant: "destructive" }); return; }
-    const data: any = { name: form.name, location: form.location, type: form.type, city: form.city, responsible: form.responsible || undefined, description: form.description || undefined, active: form.active };
+    const data: any = { name: form.name, location: form.location, type: form.type, city: form.city, responsible: form.responsible || undefined, description: form.description || undefined, active: form.active, ...(companyId !== null ? { companyId } : {}) };
     if (editingId !== null) {
       updateUnit.mutate({ id: editingId, data }, {
-        onSuccess: () => { queryClient.invalidateQueries({ queryKey: getListUnitsQueryKey() }); setOpen(false); toast({ title: "Birim güncellendi" }); },
+        onSuccess: () => { queryClient.invalidateQueries({ queryKey: unitsQKey }); setOpen(false); toast({ title: "Birim güncellendi" }); },
         onError: () => toast({ title: "Hata oluştu", variant: "destructive" }),
       });
     } else {
       createUnit.mutate({ data }, {
-        onSuccess: () => { queryClient.invalidateQueries({ queryKey: getListUnitsQueryKey() }); setOpen(false); toast({ title: "Birim eklendi" }); },
+        onSuccess: () => { queryClient.invalidateQueries({ queryKey: unitsQKey }); setOpen(false); toast({ title: "Birim eklendi" }); },
         onError: () => toast({ title: "Hata oluştu", variant: "destructive" }),
       });
     }
@@ -149,7 +156,7 @@ function AdminUnitsTab() {
   function handleDelete(id: number) {
     if (!window.confirm("Bu birimi silmek istediğinizden emin misiniz?")) return;
     deleteUnit.mutate({ id }, {
-      onSuccess: () => { queryClient.invalidateQueries({ queryKey: getListUnitsQueryKey() }); toast({ title: "Birim silindi" }); },
+      onSuccess: () => { queryClient.invalidateQueries({ queryKey: unitsQKey }); toast({ title: "Birim silindi" }); },
       onError: () => toast({ title: "Silinemedi", variant: "destructive" }),
     });
   }

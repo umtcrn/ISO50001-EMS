@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useAuth } from "@/context/AuthContext";
+import { useCompany } from "@/context/CompanyContext";
 import { useListUnits, getListUnitsQueryKey } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -30,21 +31,26 @@ const API = (token: string | null, method: string, body?: unknown, id?: number) 
 
 export default function SubUnitsTab({ unitId }: { unitId?: number }) {
   const { user, token } = useAuth();
+  const { companyId } = useCompany();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
 
-  const effectiveUnitId = user?.role !== "admin" ? user?.unitId : unitId;
+  const effectiveUnitId = user?.role !== "admin" && user?.role !== "superadmin" ? user?.unitId : unitId;
   const EMPTY: SubUnitForm = { unitId: effectiveUnitId?.toString() ?? "", name: "", city: "İstanbul", description: "", active: true };
   const [form, setForm] = useState<SubUnitForm>(EMPTY);
 
-  const { data: allUnits } = useListUnits({ query: { queryKey: getListUnitsQueryKey() } });
-  const qKey = ["sub-units", effectiveUnitId];
+  const { data: allUnits } = useListUnits({ query: { queryKey: [...getListUnitsQueryKey(), companyId] } });
+  const qKey = ["sub-units", effectiveUnitId, companyId];
   const { data: subUnits, isLoading } = useQuery<SubUnit[]>({
     queryKey: qKey,
     queryFn: () => {
-      const url = effectiveUnitId ? `/api/sub-units?unitId=${effectiveUnitId}` : "/api/sub-units";
+      const params = new URLSearchParams();
+      if (effectiveUnitId) params.set("unitId", effectiveUnitId.toString());
+      if (companyId !== null) params.set("companyId", companyId.toString());
+      const qs = params.toString();
+      const url = qs ? `/api/sub-units?${qs}` : "/api/sub-units";
       return fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
         .then(r => r.ok ? r.json() : []);
     },

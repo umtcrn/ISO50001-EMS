@@ -110,15 +110,25 @@ router.get("/users", requireAuth, async (req, res) => {
       res.status(403).json({ error: "Yetki yok" });
       return;
     }
-    const users = await db.select({
+    const companyId = req.query.companyId ? parseInt(req.query.companyId as string) : undefined;
+    let query = db.select({
       id: usersTable.id,
       username: usersTable.username,
       name: usersTable.name,
       role: usersTable.role,
       unitId: usersTable.unitId,
+      companyId: usersTable.companyId,
       active: usersTable.active,
       createdAt: usersTable.createdAt,
-    }).from(usersTable).orderBy(usersTable.name);
+    }).from(usersTable);
+
+    if (req.user!.role === "superadmin" && companyId !== undefined) {
+      const users = await query.where(eq(usersTable.companyId, companyId)).orderBy(usersTable.name);
+      res.json(users);
+      return;
+    }
+
+    const users = await query.orderBy(usersTable.name);
     res.json(users);
   } catch (err) {
     req.log.error(err);

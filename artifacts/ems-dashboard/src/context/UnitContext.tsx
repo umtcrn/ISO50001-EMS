@@ -15,13 +15,13 @@ export function UnitProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (user?.role === "user" && user.unitId !== null) {
       setUnitIdState(user.unitId);
-    } else if (user?.role === "admin") {
+    } else if (user?.role === "admin" || user?.role === "superadmin") {
       setUnitIdState(null);
     }
   }, [user]);
 
   function setUnitId(id: number | null) {
-    if (user?.role !== "admin") return;
+    if (user?.role !== "admin" && user?.role !== "superadmin") return;
     setUnitIdState(id);
   }
 

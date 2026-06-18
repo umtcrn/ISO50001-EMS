@@ -1,18 +1,31 @@
 import { Router } from "express";
 import { db, energySourcesTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { requireAuth } from "../middlewares/auth.js";
 
 const router = Router();
 
-// GET /api/energy-sources?unitId=1
+// GET /api/energy-sources?unitId=1&companyId=1
 router.get("/energy-sources", requireAuth, async (req, res) => {
   try {
+    const role = req.user!.role;
     const unitId = req.query.unitId ? parseInt(req.query.unitId as string) : undefined;
+    const companyId = req.query.companyId ? parseInt(req.query.companyId as string) : undefined;
 
-    if (req.user!.role !== "admin" && req.user!.unitId !== null) {
+    if (role !== "admin" && role !== "superadmin" && req.user!.unitId !== null) {
       const rows = await db.select().from(energySourcesTable)
-        .where(eq(energySourcesTable.unitId, req.user!.unitId))
+        .where(eq(energySourcesTable.unitId, req.user!.unitId!))
+        .orderBy(energySourcesTable.name);
+      res.json(rows);
+      return;
+    }
+
+    if (role === "superadmin" && companyId !== undefined) {
+      const rows = await db.select().from(energySourcesTable)
+        .where(and(
+          eq(energySourcesTable.companyId, companyId),
+          ...(unitId !== undefined ? [eq(energySourcesTable.unitId, unitId)] : [])
+        ))
         .orderBy(energySourcesTable.name);
       res.json(rows);
       return;

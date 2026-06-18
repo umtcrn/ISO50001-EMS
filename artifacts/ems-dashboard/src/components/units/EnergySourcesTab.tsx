@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useAuth } from "@/context/AuthContext";
+import { useCompany } from "@/context/CompanyContext";
 import { useListUnits, getListUnitsQueryKey } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -35,21 +36,26 @@ const API = (token: string | null, method: string, body?: unknown, id?: number) 
 
 export default function EnergySourcesTab({ unitId }: { unitId?: number }) {
   const { user, token } = useAuth();
+  const { companyId } = useCompany();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
 
-  const effectiveUnitId = user?.role !== "admin" ? user?.unitId : unitId;
+  const effectiveUnitId = user?.role !== "admin" && user?.role !== "superadmin" ? user?.unitId : unitId;
   const EMPTY: ESForm = { unitId: effectiveUnitId?.toString() ?? "", type: "elektrik", name: "Elektrik", unit: "kWh", active: true };
   const [form, setForm] = useState<ESForm>(EMPTY);
 
-  const { data: allUnits } = useListUnits({ query: { queryKey: getListUnitsQueryKey() } });
-  const qKey = ["energy-sources", effectiveUnitId];
+  const { data: allUnits } = useListUnits({ query: { queryKey: [...getListUnitsQueryKey(), companyId] } });
+  const qKey = ["energy-sources", effectiveUnitId, companyId];
   const { data: sources, isLoading } = useQuery<EnergySource[]>({
     queryKey: qKey,
     queryFn: () => {
-      const url = effectiveUnitId ? `/api/energy-sources?unitId=${effectiveUnitId}` : "/api/energy-sources";
+      const params = new URLSearchParams();
+      if (effectiveUnitId) params.set("unitId", effectiveUnitId.toString());
+      if (companyId !== null) params.set("companyId", companyId.toString());
+      const qs = params.toString();
+      const url = qs ? `/api/energy-sources?${qs}` : "/api/energy-sources";
       return fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : {} }).then(r => r.json());
     },
   });

@@ -8,11 +8,26 @@ const router = Router();
 // GET /api/units
 router.get("/units", requireAuth, async (req, res) => {
   try {
-    let units = await db.select().from(unitsTable).orderBy(unitsTable.name);
-    // Non-admin users only see their own unit
-    if (req.user!.role !== "admin" && req.user!.unitId !== null) {
-      units = units.filter(u => u.id === req.user!.unitId);
+    const role = req.user!.role;
+    const companyId = req.query.companyId ? parseInt(req.query.companyId as string) : undefined;
+
+    if (role !== "admin" && role !== "superadmin" && req.user!.unitId !== null) {
+      const units = await db.select().from(unitsTable)
+        .where(eq(unitsTable.id, req.user!.unitId!))
+        .orderBy(unitsTable.name);
+      res.json(units);
+      return;
     }
+
+    if (role === "superadmin" && companyId !== undefined) {
+      const units = await db.select().from(unitsTable)
+        .where(eq(unitsTable.companyId, companyId))
+        .orderBy(unitsTable.name);
+      res.json(units);
+      return;
+    }
+
+    const units = await db.select().from(unitsTable).orderBy(unitsTable.name);
     res.json(units);
   } catch (err) {
     req.log.error(err);
@@ -23,12 +38,14 @@ router.get("/units", requireAuth, async (req, res) => {
 // POST /api/units — admin only
 router.post("/units", requireAdmin, async (req, res) => {
   try {
-    const { name, location, type, city, responsible, description, active } = req.body;
+    const { name, location, type, city, responsible, description, active, companyId } = req.body;
     if (!name || !location) { res.status(400).json({ error: "Ad ve lokasyon zorunludur" }); return; }
+    const effectiveCompanyId = req.user!.role === "superadmin" && companyId ? parseInt(companyId) : 1;
     const [unit] = await db.insert(unitsTable).values({
       name, location, type: type || "fabrika", city: city || "Istanbul",
       responsible: responsible || null, description: description || null,
       active: active !== undefined ? Boolean(active) : true,
+      companyId: effectiveCompanyId,
     }).returning();
     res.status(201).json(unit);
   } catch (err) {

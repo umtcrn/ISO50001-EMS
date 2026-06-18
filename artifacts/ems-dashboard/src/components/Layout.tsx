@@ -2,8 +2,9 @@ import { ReactNode } from "react";
 import { Link, useLocation } from "wouter";
 import { useYear } from "../context/YearContext";
 import { useUnit } from "../context/UnitContext";
+import { useCompany } from "../context/CompanyContext";
 import { useAuth } from "../context/AuthContext";
-import { useListUnits, getListUnitsQueryKey } from "@workspace/api-client-react";
+import { useListUnits, getListUnitsQueryKey, useListCompanies, getListCompaniesQueryKey } from "@workspace/api-client-react";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -17,7 +18,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import {
   Activity, AlertTriangle, BarChart2, Building2, CloudLightning, FileText,
-  Gauge, Home, LayoutDashboard, Lightbulb, ShieldAlert, Target, User, LogOut, Globe,
+  Gauge, Home, LayoutDashboard, Lightbulb, ShieldAlert, Target, User, LogOut, Globe, Building,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -72,13 +73,20 @@ export function Layout({ children }: { children: ReactNode }) {
   const [location] = useLocation();
   const { year, setYear } = useYear();
   const { unitId, setUnitId } = useUnit();
+  const { companyId, setCompanyId } = useCompany();
   const { user, logout } = useAuth();
-
-  const { data: units } = useListUnits({ query: { queryKey: getListUnitsQueryKey() } });
-  const years = Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - i);
 
   const isSuperAdmin = user?.role === "superadmin";
   const isAdmin = user?.role === "admin" || isSuperAdmin;
+
+  const { data: companies } = useListCompanies({ query: { queryKey: getListCompaniesQueryKey(), enabled: isSuperAdmin } });
+
+  const unitsParams = isSuperAdmin && companyId ? { companyId } : {};
+  const { data: units } = useListUnits(
+    unitsParams as any,
+    { query: { queryKey: [...getListUnitsQueryKey(), companyId] } }
+  );
+  const years = Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - i);
   const topNavItems = isAdmin ? ADMIN_NAV : USER_NAV;
   const navItems = [...topNavItems, ...COMMON_NAV];
 
@@ -184,6 +192,26 @@ export function Layout({ children }: { children: ReactNode }) {
               )}
             </div>
             <div className="flex items-center gap-3">
+              {isSuperAdmin && (
+                <Select
+                  value={companyId !== null ? companyId.toString() : "0"}
+                  onValueChange={(val) => {
+                    setCompanyId(val === "0" ? null : parseInt(val));
+                    setUnitId(null);
+                  }}
+                >
+                  <SelectTrigger className="w-48 bg-background">
+                    <Building className="h-3.5 w-3.5 text-muted-foreground mr-1" />
+                    <SelectValue placeholder="Firma Seç" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="0">Tüm Firmalar</SelectItem>
+                    {(companies ?? []).map((c: any) => (
+                      <SelectItem key={c.id} value={c.id.toString()}>{c.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
               {isAdmin && (
                 <Select
                   value={unitId !== null ? unitId.toString() : "0"}
