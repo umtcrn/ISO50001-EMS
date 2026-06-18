@@ -2,9 +2,23 @@ import { pgTable, serial, text, integer, real, timestamp, boolean } from "drizzl
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
+// ── Companies (Firmalar) ──────────────────────────────────
+export const companiesTable = pgTable("companies", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  subdomain: text("subdomain").notNull().unique(),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertCompanySchema = createInsertSchema(companiesTable).omit({ id: true, createdAt: true });
+export type InsertCompany = z.infer<typeof insertCompanySchema>;
+export type Company = typeof companiesTable.$inferSelect;
+
 // ── Users ────────────────────────────────────────────────
 export const usersTable = pgTable("users", {
   id: serial("id").primaryKey(),
+  companyId: integer("company_id").references(() => companiesTable.id).notNull().default(1),
   username: text("username").notNull().unique(),
   passwordHash: text("password_hash").notNull(),
   name: text("name").notNull(),
@@ -22,6 +36,7 @@ export type UserRecord = typeof usersTable.$inferSelect;
 // ── Units (Birimler) ──────────────────────────────────────
 export const unitsTable = pgTable("units", {
   id: serial("id").primaryKey(),
+  companyId: integer("company_id").references(() => companiesTable.id).notNull().default(1),
   name: text("name").notNull(),
   location: text("location").notNull(),
   type: text("type").notNull().default("fabrika"),
@@ -40,6 +55,7 @@ export type Unit = typeof unitsTable.$inferSelect;
 // ── Sub-Units / Locations (Alt Birimler / Lokasyonlar) ────
 export const subUnitsTable = pgTable("sub_units", {
   id: serial("id").primaryKey(),
+  companyId: integer("company_id").references(() => companiesTable.id).notNull().default(1),
   unitId: integer("unit_id").references(() => unitsTable.id, { onDelete: "cascade" }).notNull(),
   name: text("name").notNull(),
   city: text("city").notNull().default("Istanbul"),
@@ -55,6 +71,7 @@ export type SubUnit = typeof subUnitsTable.$inferSelect;
 // ── Energy Sources (Enerji Kaynakları) ────────────────────
 export const energySourcesTable = pgTable("energy_sources", {
   id: serial("id").primaryKey(),
+  companyId: integer("company_id").references(() => companiesTable.id).notNull().default(1),
   unitId: integer("unit_id").references(() => unitsTable.id, { onDelete: "cascade" }).notNull(),
   type: text("type").notNull(), // elektrik | dogalgaz | buhar | su | diger
   name: text("name").notNull(),
@@ -70,6 +87,7 @@ export type EnergySource = typeof energySourcesTable.$inferSelect;
 // ── Meters ───────────────────────────────────────────────
 export const metersTable = pgTable("meters", {
   id: serial("id").primaryKey(),
+  companyId: integer("company_id").references(() => companiesTable.id).notNull().default(1),
   unitId: integer("unit_id").references(() => unitsTable.id, { onDelete: "set null" }),
   subUnitId: integer("sub_unit_id").references(() => subUnitsTable.id, { onDelete: "set null" }),
   energySourceId: integer("energy_source_id").references(() => energySourcesTable.id, { onDelete: "set null" }),
@@ -89,6 +107,7 @@ export type Meter = typeof metersTable.$inferSelect;
 // ── Consumption ──────────────────────────────────────────
 export const consumptionTable = pgTable("consumption", {
   id: serial("id").primaryKey(),
+  companyId: integer("company_id").references(() => companiesTable.id).notNull().default(1),
   meterId: integer("meter_id").references(() => metersTable.id, { onDelete: "cascade" }).notNull(),
   year: integer("year").notNull(),
   month: integer("month").notNull(),
@@ -108,6 +127,7 @@ export type ConsumptionRecord = typeof consumptionTable.$inferSelect;
 // ── Weather ──────────────────────────────────────────────
 export const weatherTable = pgTable("weather", {
   id: serial("id").primaryKey(),
+  companyId: integer("company_id").references(() => companiesTable.id).notNull().default(1),
   year: integer("year").notNull(),
   month: integer("month").notNull(),
   hdd: real("hdd").notNull().default(0),
@@ -124,6 +144,7 @@ export type WeatherRecord = typeof weatherTable.$inferSelect;
 // ── SWOT ─────────────────────────────────────────────────
 export const swotTable = pgTable("swot_items", {
   id: serial("id").primaryKey(),
+  companyId: integer("company_id").references(() => companiesTable.id).notNull().default(1),
   unitId: integer("unit_id").references(() => unitsTable.id, { onDelete: "cascade" }),
   category: text("category").notNull(),
   title: text("title").notNull(),
@@ -140,6 +161,7 @@ export type SwotItem = typeof swotTable.$inferSelect;
 // ── Risks ────────────────────────────────────────────────
 export const risksTable = pgTable("risks", {
   id: serial("id").primaryKey(),
+  companyId: integer("company_id").references(() => companiesTable.id).notNull().default(1),
   unitId: integer("unit_id").references(() => unitsTable.id, { onDelete: "cascade" }),
   type: text("type").notNull().default("risk"),
   title: text("title").notNull(),
@@ -160,6 +182,7 @@ export type RiskItem = typeof risksTable.$inferSelect;
 // ── SEU / ÖEK ────────────────────────────────────────────
 export const seuTable = pgTable("seu_items", {
   id: serial("id").primaryKey(),
+  companyId: integer("company_id").references(() => companiesTable.id).notNull().default(1),
   unitId: integer("unit_id").references(() => unitsTable.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   category: text("category").notNull(),
@@ -179,6 +202,7 @@ export type SeuItem = typeof seuTable.$inferSelect;
 // ── Energy Targets (Enerji Hedefleri) ────────────────────
 export const energyTargetsTable = pgTable("energy_targets", {
   id: serial("id").primaryKey(),
+  companyId: integer("company_id").references(() => companiesTable.id).notNull().default(1),
   unitId: integer("unit_id").references(() => unitsTable.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   baselineYear: integer("baseline_year").notNull(),
@@ -195,6 +219,7 @@ export type EnergyTarget = typeof energyTargetsTable.$inferSelect;
 // ── Reports ───────────────────────────────────────────────
 export const reportsTable = pgTable("reports", {
   id: serial("id").primaryKey(),
+  companyId: integer("company_id").references(() => companiesTable.id).notNull().default(1),
   unitId: integer("unit_id").references(() => unitsTable.id, { onDelete: "set null" }),
   year: integer("year").notNull(),
   status: text("status").notNull().default("pending"),

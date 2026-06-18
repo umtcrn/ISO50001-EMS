@@ -12,8 +12,12 @@ description: Key decisions and conventions for the ISO 50001 Enerji Yönetim Sis
 - API hooks from `@workspace/api-client-react` — never relative imports
 - Recharts for all data visualization
 
-## DB Tables
-`units`, `users`, `meters`, `consumption`, `weather`, `swot_items`, `risks`, `seu_items`, `reports` — all in `lib/db/src/schema/energy.ts`, exported via `lib/db/src/schema/index.ts`
+## DB Tables (13 total after multi-tenant prep)
+`companies`, `units`, `users`, `meters`, `sub_units`, `energy_sources`, `consumption`, `weather`, `swot_items`, `risks`, `seu_items`, `energy_targets`, `reports` — all in `lib/db/src/schema/energy.ts`.
+
+## Multi-tenant scaffold (company_id)
+All 12 business tables have `company_id INTEGER NOT NULL DEFAULT 1 REFERENCES companies(id)`. Migration `0003_loud_namorita.sql` seeds default company (id=1, subdomain='default') before adding FK constraints — order matters. App still runs in single-company mode; no routing/subdomain logic yet.
+**Why:** Schema-level isolation foundation for future SaaS tenancy. Keep `DEFAULT 1` so new inserts don't need explicit company_id until multi-tenant routing is wired.
 
 ## Auto-migration on startup
 API server runs `runMigrations()` (from `lib/db/src/index.ts`) before listening. Build script copies `lib/db/drizzle/` → `dist/drizzle/`. Any schema change: run `drizzle-kit generate` in `lib/db/`, commit the SQL file, restart API Server.
@@ -25,7 +29,7 @@ API server runs `runMigrations()` (from `lib/db/src/index.ts`) before listening.
 
 ## Demo reset endpoint
 `POST /api/admin/reset` body: `{ mode: "demo" | "all" }` in `artifacts/api-server/src/routes/seed.ts`.
-- `demo`: deletes users where isDemo=true, finds units where isDemo=true, explicitly deletes their meters (no cascade on meters.unitId), then deletes those units (cascade handles sub_units, energy_sources, swot, risks, seu).
+- `demo`: deletes users where isDemo=true, finds units where isDemo=true, explicitly deletes their meters (no cascade on meters.unitId), then deletes those units (cascade handles sub_units, energy_sources, swot, risks, seu, energy_targets).
 - `all`: deletes everything except admin user.
 
 ## AI Integration
