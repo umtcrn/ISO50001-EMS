@@ -40,7 +40,7 @@ export default function UsersTab({ unitFilter }: { unitFilter?: number }) {
     queryFn: () => fetch("/api/users", { headers: token ? { Authorization: `Bearer ${token}` } : {} }).then(r => r.json()),
   });
   const users = unitFilter !== undefined
-    ? (allUsers ?? []).filter(u => u.unitId === unitFilter || (u.role === "admin"))
+    ? (allUsers ?? []).filter(u => u.unitId === unitFilter || u.role === "admin" || u.role === "superadmin")
     : allUsers;
 
   const createMut = useMutation({
@@ -84,12 +84,14 @@ export default function UsersTab({ unitFilter }: { unitFilter?: number }) {
               <CardContent className="p-4 flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="h-8 w-8 rounded-full bg-secondary flex items-center justify-center">
-                    {u.role === "admin" ? <ShieldCheck className="h-4 w-4 text-teal-400" /> : <User className="h-4 w-4 text-muted-foreground" />}
+                    {(u.role === "admin" || u.role === "superadmin") ? <ShieldCheck className="h-4 w-4 text-teal-400" /> : <User className="h-4 w-4 text-muted-foreground" />}
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
                       <span className="font-medium text-sm">{u.name}</span>
-                      <Badge variant="outline" className={`text-xs ${u.role === "admin" ? "text-teal-400 border-teal-500/30" : ""}`}>{u.role === "admin" ? "Yönetici" : "Kullanıcı"}</Badge>
+                      <Badge variant="outline" className={`text-xs ${u.role === "superadmin" ? "text-amber-400 border-amber-500/30" : u.role === "admin" ? "text-teal-400 border-teal-500/30" : ""}`}>
+                        {u.role === "superadmin" ? "Sistem Yöneticisi" : u.role === "admin" ? "Yönetici" : "Kullanıcı"}
+                      </Badge>
                       {!u.active && <Badge variant="outline" className="text-xs text-muted-foreground">Pasif</Badge>}
                     </div>
                     <div className="text-xs text-muted-foreground">

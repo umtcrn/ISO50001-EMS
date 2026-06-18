@@ -35,7 +35,7 @@ export default function Analysis() {
   const { year } = useYear();
   const { unitId } = useUnit();
   const { user } = useAuth();
-  const isAdmin = user?.role === "admin";
+  const isAdmin = user?.role === "admin" || user?.role === "superadmin";
   const [meterId, setMeterId] = useState<string>("all");
 
   const unitParam = unitId !== null ? { unitId } : undefined;

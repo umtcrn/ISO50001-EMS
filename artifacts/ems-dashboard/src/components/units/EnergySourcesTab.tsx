@@ -122,7 +122,7 @@ export default function EnergySourcesTab({ unitId }: { unitId?: number }) {
         <DialogContent className="sm:max-w-md">
           <DialogHeader><DialogTitle>{editingId ? "Enerji Kaynağı Düzenle" : "Enerji Kaynağı Ekle"}</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
-            {user?.role === "admin" && !unitId && (
+            {(user?.role === "admin" || user?.role === "superadmin") && !unitId && (
               <div className="space-y-1.5">
                 <Label>Birim *</Label>
                 <Select value={form.unitId} onValueChange={v => setForm(f => ({ ...f, unitId: v }))}>

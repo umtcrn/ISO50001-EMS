@@ -65,7 +65,7 @@ export default function Consumption() {
   const [hddFetching, setHddFetching] = useState(false);
 
   const { unitId } = useUnit();
-  const isAdmin = user?.role === "admin";
+  const isAdmin = user?.role === "admin" || user?.role === "superadmin";
 
   const esKey = ["energy-sources", unitId];
   const { data: energySources } = useQuery<EnergySource[]>({

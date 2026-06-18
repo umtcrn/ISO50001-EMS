@@ -151,7 +151,7 @@ export default function Targets() {
   const { toast } = useToast();
   const { unitId } = useUnit();
   const { user } = useAuth();
-  const isAdmin = user?.role === "admin";
+  const isAdmin = user?.role === "admin" || user?.role === "superadmin";
   const unitParam = unitId !== null ? { unitId } : undefined;
 
   const [open, setOpen] = useState(false);

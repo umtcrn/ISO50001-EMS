@@ -56,7 +56,7 @@ export default function Meters() {
   const [filterSubUnit, setFilterSubUnit] = useState("all");
   const [filterSource, setFilterSource] = useState("all");
 
-  const isAdmin = user?.role === "admin";
+  const isAdmin = user?.role === "admin" || user?.role === "superadmin";
   const effectiveUnitId = isAdmin ? undefined : (user?.unitId ?? undefined);
 
   const { data: allUnits } = useListUnits({ query: { queryKey: getListUnitsQueryKey() } });
