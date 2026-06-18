@@ -1,4 +1,4 @@
-modules = ["nodejs-24"]
+modules = ["nodejs-24", "postgresql-16"]
 
 [deployment]
 router = "application"
@@ -49,7 +49,7 @@ args = "export PORT=5173 BASE_PATH=/ && pnpm --filter @workspace/ems-dashboard r
 waitForPort = 5173
 
 [agent]
-stack = "PNPM_WORKSPACE"
+stack = "BEST_EFFORT_FALLBACK"
 expertMode = true
 
 [postMerge]
@@ -75,3 +75,6 @@ externalPort = 3001
 [[ports]]
 localPort = 21055
 externalPort = 3000
+
+[nix]
+channel = "stable-25_05"

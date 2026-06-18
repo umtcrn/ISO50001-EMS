@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { createHash, randomUUID } from "crypto";
 import { db } from "@workspace/db";
-import { usersTable, unitsTable } from "@workspace/db";
+import { usersTable, unitsTable, companiesTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { sessions, requireAuth } from "../middlewares/auth.js";
 
@@ -13,6 +13,16 @@ function hashPassword(password: string): string {
 
 export async function seedAdminUser() {
   try {
+    const [existingCompany] = await db.select().from(companiesTable).where(eq(companiesTable.id, 1));
+    if (!existingCompany) {
+      await db.insert(companiesTable).values({
+        name: "Varsayılan Şirket",
+        subdomain: "default",
+        isActive: true,
+      });
+      console.log("[Auth] Varsayılan şirket oluşturuldu");
+    }
+
     const [existing] = await db.select().from(usersTable).where(eq(usersTable.username, "admin"));
     if (!existing) {
       await db.insert(usersTable).values({
