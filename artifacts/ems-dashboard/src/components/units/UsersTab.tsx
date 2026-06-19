@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { useCompany } from "@/context/CompanyContext";
-import { useListUnits, getListUnitsQueryKey } from "@workspace/api-client-react";
+import { useListUnits, getListUnitsQueryKey, useListCompanies, getListCompaniesQueryKey } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,11 +11,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
-import { Plus, Pencil, Trash2, User, ShieldCheck } from "lucide-react";
+import { Plus, Pencil, Trash2, User, ShieldCheck, Building2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
-interface UserRecord { id: number; username: string; name: string; role: string; unitId: number | null; active: boolean; }
+interface UserRecord { id: number; username: string; name: string; role: string; unitId: number | null; companyId: number; active: boolean; }
 interface UserForm { username: string; password: string; name: string; role: string; unitId: string; active: boolean; }
 const EMPTY: UserForm = { username: "", password: "", name: "", role: "user", unitId: "", active: true };
 
@@ -27,7 +27,7 @@ const API = (token: string | null, method: string, body?: unknown, id?: number) 
   }).then(r => r.ok ? (r.status === 204 ? null : r.json()) : r.json().then((e: any) => { throw new Error(e.error); }));
 
 export default function UsersTab({ unitFilter }: { unitFilter?: number }) {
-  const { token } = useAuth();
+  const { token, user: authUser } = useAuth();
   const { companyId } = useCompany();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -35,7 +35,11 @@ export default function UsersTab({ unitFilter }: { unitFilter?: number }) {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState<UserForm>(EMPTY);
 
+  const isSuperAdmin = authUser?.role === "superadmin";
+
   const { data: allUnits } = useListUnits({ query: { queryKey: [...getListUnitsQueryKey(), companyId] } });
+  const { data: allCompanies } = useListCompanies({ query: { queryKey: getListCompaniesQueryKey(), enabled: isSuperAdmin } });
+
   const qKey = ["users", companyId];
   const { data: allUsers, isLoading } = useQuery<UserRecord[]>({
     queryKey: qKey,
@@ -66,6 +70,12 @@ export default function UsersTab({ unitFilter }: { unitFilter?: number }) {
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: qKey }); toast({ title: "Kullanıcı silindi" }); },
     onError: (e: any) => toast({ title: e.message, variant: "destructive" }),
   });
+
+  function getCompanyName(cId: number): string {
+    if (!allCompanies) return `Firma #${cId}`;
+    const found = (allCompanies as any[]).find((c: any) => c.id === cId);
+    return found?.name ?? `Firma #${cId}`;
+  }
 
   function openCreate() { setEditingId(null); setForm(EMPTY); setOpen(true); }
   function openEdit(u: UserRecord) { setEditingId(u.id); setForm({ username: u.username, password: "", name: u.name, role: u.role, unitId: u.unitId?.toString() ?? "", active: u.active }); setOpen(true); }
@@ -102,9 +112,17 @@ export default function UsersTab({ unitFilter }: { unitFilter?: number }) {
                       </Badge>
                       {!u.active && <Badge variant="outline" className="text-xs text-muted-foreground">Pasif</Badge>}
                     </div>
-                    <div className="text-xs text-muted-foreground">
-                      {u.username}
-                      {u.unitId && allUnits && <span className="ml-2">• {(allUnits as any[]).find((un: any) => un.id === u.unitId)?.name ?? `Birim #${u.unitId}`}</span>}
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
+                      <span>{u.username}</span>
+                      {u.unitId && allUnits && (
+                        <span>• {(allUnits as any[]).find((un: any) => un.id === u.unitId)?.name ?? `Birim #${u.unitId}`}</span>
+                      )}
+                      {isSuperAdmin && u.companyId && (
+                        <span className="flex items-center gap-1 text-blue-400/80">
+                          <Building2 className="h-3 w-3" />
+                          {getCompanyName(u.companyId)}
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
