@@ -15,14 +15,41 @@ export interface RiskItem {
   title: string;
   /** @nullable */
   description?: string | null;
+  /**
+     * Öngörülebilir etki
+     * @nullable
+     */
+  foreseenImpact?: string | null;
   /** 1-5 */
   probability: number;
   /** 1-5 */
   severity: number;
   /** probability * severity */
   score: number;
+  /** aksiyon | izleme */
+  responseType?: string;
   /** @nullable */
   mitigationPlan?: string | null;
+  /**
+     * Hedeflenen olasılık (1-5, sadece risk+aksiyon)
+     * @nullable
+     */
+  targetProbability?: number | null;
+  /**
+     * Hedeflenen etki (1-5, sadece risk+aksiyon)
+     * @nullable
+     */
+  targetSeverity?: number | null;
+  /**
+     * Hedeflenen risk skoru
+     * @nullable
+     */
+  targetScore?: number | null;
+  /**
+     * Gerçekleşme durumu açıklaması
+     * @nullable
+     */
+  occurrenceNote?: string | null;
   /** @nullable */
   owner?: string | null;
   /** acik | devam | kapali */

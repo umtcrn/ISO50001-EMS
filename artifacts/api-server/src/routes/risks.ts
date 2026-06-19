@@ -28,8 +28,15 @@ router.get("/risks", requireAuth, async (req, res) => {
       : await db.select().from(risksTable).orderBy(risksTable.createdAt);
     res.json(items.map(i => ({
       id: i.id, unitId: i.unitId, type: i.type, title: i.title, description: i.description,
+      foreseenImpact: i.foreseenImpact,
       probability: i.probability, severity: i.severity, score: i.score,
-      mitigationPlan: i.mitigationPlan, owner: i.owner, status: i.status, createdAt: i.createdAt,
+      responseType: i.responseType,
+      mitigationPlan: i.mitigationPlan,
+      targetProbability: i.targetProbability,
+      targetSeverity: i.targetSeverity,
+      targetScore: i.targetScore,
+      occurrenceNote: i.occurrenceNote,
+      owner: i.owner, status: i.status, createdAt: i.createdAt,
     })));
   } catch (err) {
     req.log.error(err);
@@ -40,20 +47,38 @@ router.get("/risks", requireAuth, async (req, res) => {
 router.post("/risks", requireAuth, async (req, res) => {
   try {
     const { role, companyId: sessionCompanyId, unitId: sessionUnitId } = req.user!;
-    const { type, title, description, probability, severity, mitigationPlan, owner, status, unitId } = req.body;
+    const {
+      type, title, description, foreseenImpact,
+      probability, severity, responseType, mitigationPlan,
+      targetProbability, targetSeverity,
+      occurrenceNote, owner, status, unitId,
+    } = req.body;
     if (!title || !probability || !severity) {
       res.status(400).json({ error: "Zorunlu alanlar eksik" }); return;
+    }
+    if (responseType === "aksiyon" && !mitigationPlan) {
+      res.status(400).json({ error: "Aksiyon seçildiğinde eylem planı zorunludur" }); return;
     }
     const prob = parseInt(probability);
     const sev = parseInt(severity);
     const resolvedUnitId = role !== "admin" && role !== "superadmin" && sessionUnitId !== null
       ? sessionUnitId
       : (unitId ? parseInt(unitId) : null);
+
+    const tProb = targetProbability ? parseInt(targetProbability) : null;
+    const tSev = targetSeverity ? parseInt(targetSeverity) : null;
+
     const [item] = await db.insert(risksTable).values({
       type: type || "risk", title,
       description: description || null,
+      foreseenImpact: foreseenImpact || null,
       probability: prob, severity: sev, score: prob * sev,
+      responseType: responseType || "izleme",
       mitigationPlan: mitigationPlan || null,
+      targetProbability: tProb,
+      targetSeverity: tSev,
+      targetScore: (tProb && tSev) ? tProb * tSev : null,
+      occurrenceNote: occurrenceNote || null,
       owner: owner || null,
       status: status || "acik",
       unitId: resolvedUnitId,
@@ -78,15 +103,39 @@ router.patch("/risks/:id", requireAuth, async (req, res) => {
     if (role === "admin" && existing.companyId !== sessionCompanyId) {
       res.status(403).json({ error: "Bu kaydı düzenleme yetkiniz yok" }); return;
     }
-    const { type, title, description, probability, severity, mitigationPlan, owner, status, unitId } = req.body;
+    const {
+      type, title, description, foreseenImpact,
+      probability, severity, responseType, mitigationPlan,
+      targetProbability, targetSeverity,
+      occurrenceNote, owner, status, unitId,
+    } = req.body;
+
+    const resolvedResponseType = responseType ?? existing.responseType;
+    if (resolvedResponseType === "aksiyon") {
+      const resolvedPlan = mitigationPlan ?? existing.mitigationPlan;
+      if (!resolvedPlan) {
+        res.status(400).json({ error: "Aksiyon seçildiğinde eylem planı zorunludur" }); return;
+      }
+    }
+
     const updates: Record<string, unknown> = {};
     if (type !== undefined) updates.type = type;
     if (title !== undefined) updates.title = title;
     if (description !== undefined) updates.description = description;
+    if (foreseenImpact !== undefined) updates.foreseenImpact = foreseenImpact;
     if (probability !== undefined) updates.probability = parseInt(probability);
     if (severity !== undefined) updates.severity = parseInt(severity);
     if (probability !== undefined && severity !== undefined) updates.score = parseInt(probability) * parseInt(severity);
+    if (responseType !== undefined) updates.responseType = responseType;
     if (mitigationPlan !== undefined) updates.mitigationPlan = mitigationPlan;
+    if (targetProbability !== undefined) updates.targetProbability = targetProbability ? parseInt(targetProbability) : null;
+    if (targetSeverity !== undefined) updates.targetSeverity = targetSeverity ? parseInt(targetSeverity) : null;
+    if (targetProbability !== undefined && targetSeverity !== undefined) {
+      const tP = targetProbability ? parseInt(targetProbability) : null;
+      const tS = targetSeverity ? parseInt(targetSeverity) : null;
+      updates.targetScore = (tP && tS) ? tP * tS : null;
+    }
+    if (occurrenceNote !== undefined) updates.occurrenceNote = occurrenceNote;
     if (owner !== undefined) updates.owner = owner;
     if (status !== undefined) updates.status = status;
     if ((role === "admin" || role === "superadmin") && unitId !== undefined) {

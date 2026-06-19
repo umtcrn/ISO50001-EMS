@@ -11,9 +11,15 @@ export interface RiskUpdate {
   type?: string;
   title?: string;
   description?: string;
+  foreseenImpact?: string;
   probability?: number;
   severity?: number;
+  responseType?: string;
   mitigationPlan?: string;
+  targetProbability?: number;
+  targetSeverity?: number;
+  targetScore?: number;
+  occurrenceNote?: string;
   owner?: string;
   status?: string;
 }

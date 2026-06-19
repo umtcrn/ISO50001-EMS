@@ -14,15 +14,37 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Slider } from "@/components/ui/slider";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Pencil, Trash2, Building2 } from "lucide-react";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Plus, Pencil, Trash2, Building2, Target, ClipboardList, Eye } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { type MatrixConfig, type MatrixGrade, riskMatrixConfig, opportunityMatrixConfig } from "@/config/matrixConfig";
 
 interface RiskForm {
-  type: string; title: string; description: string;
-  probability: number; severity: number; mitigationPlan: string; owner: string; status: string;
+  type: string;
+  title: string;
+  description: string;
+  foreseenImpact: string;
+  probability: number;
+  severity: number;
+  responseType: string;
+  mitigationPlan: string;
+  targetProbability: number;
+  targetSeverity: number;
+  owner: string;
+  status: string;
+  occurrenceNote: string;
 }
-const EMPTY: RiskForm = { type: "risk", title: "", description: "", probability: 3, severity: 3, mitigationPlan: "", owner: "", status: "acik" };
+
+const EMPTY: RiskForm = {
+  type: "risk", title: "", description: "",
+  foreseenImpact: "",
+  probability: 3, severity: 3,
+  responseType: "izleme",
+  mitigationPlan: "",
+  targetProbability: 2, targetSeverity: 2,
+  owner: "", status: "acik",
+  occurrenceNote: "",
+};
 
 function resolveGrade(score: number, grades: MatrixGrade[]): MatrixGrade {
   return grades.find(g => score >= g.min && score <= g.max) ?? grades[0];
@@ -182,6 +204,19 @@ function ScoreBadge({ score, type }: { score: number; type: string }) {
   );
 }
 
+function ScoreDisplay({ prob, sev, type, label }: { prob: number; sev: number; type: string; label?: string }) {
+  const score = prob * sev;
+  const cfg = type === "firsat" ? opportunityMatrixConfig : riskMatrixConfig;
+  const grade = resolveGrade(score, cfg.grades);
+  return (
+    <div className={`rounded-md p-3 flex flex-col items-center justify-center border ${grade.badgeStyle}`}>
+      <p className="text-[10px] opacity-70 mb-0.5">{label ?? "Skor"}</p>
+      <p className="text-2xl font-bold leading-none">{score}</p>
+      <p className="text-[10px] mt-1 font-medium">{grade.shortLabel}</p>
+    </div>
+  );
+}
+
 export default function Risks() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -208,13 +243,57 @@ export default function Risks() {
   function openCreate() { setEditingId(null); setForm(EMPTY); setOpen(true); }
   function openEdit(r: any) {
     setEditingId(r.id);
-    setForm({ type: r.type, title: r.title, description: r.description ?? "", probability: r.probability, severity: r.severity, mitigationPlan: r.mitigationPlan ?? "", owner: r.owner ?? "", status: r.status });
+    setForm({
+      type: r.type,
+      title: r.title,
+      description: r.description ?? "",
+      foreseenImpact: r.foreseenImpact ?? "",
+      probability: r.probability,
+      severity: r.severity,
+      responseType: r.responseType ?? "izleme",
+      mitigationPlan: r.mitigationPlan ?? "",
+      targetProbability: r.targetProbability ?? 2,
+      targetSeverity: r.targetSeverity ?? 2,
+      owner: r.owner ?? "",
+      status: r.status,
+      occurrenceNote: r.occurrenceNote ?? "",
+    });
     setOpen(true);
   }
 
   function handleSave() {
     if (!form.title) { toast({ title: "Başlık gerekli", variant: "destructive" }); return; }
-    const data: any = { type: form.type, title: form.title, description: form.description || undefined, probability: form.probability, severity: form.severity, mitigationPlan: form.mitigationPlan || undefined, owner: form.owner || undefined, status: form.status };
+    if (form.responseType === "aksiyon" && !form.mitigationPlan.trim()) {
+      toast({ title: "Aksiyon seçildiğinde eylem planı zorunludur", variant: "destructive" }); return;
+    }
+
+    const isRisk = form.type === "risk";
+    const hasAction = form.responseType === "aksiyon";
+
+    const data: any = {
+      type: form.type,
+      title: form.title,
+      description: form.description || undefined,
+      foreseenImpact: form.foreseenImpact || undefined,
+      probability: form.probability,
+      severity: form.severity,
+      responseType: form.responseType,
+      mitigationPlan: form.mitigationPlan || undefined,
+      owner: form.owner || undefined,
+      status: form.status,
+      occurrenceNote: form.occurrenceNote || undefined,
+    };
+
+    if (isRisk && hasAction) {
+      data.targetProbability = form.targetProbability;
+      data.targetSeverity = form.targetSeverity;
+      data.targetScore = form.targetProbability * form.targetSeverity;
+    } else {
+      data.targetProbability = null;
+      data.targetSeverity = null;
+      data.targetScore = null;
+    }
+
     if (unitId !== null) data.unitId = unitId;
     if (editingId !== null) {
       updateRisk.mutate({ id: editingId, data }, { onSuccess: () => { queryClient.invalidateQueries({ queryKey: getListRisksQueryKey(unitParam) }); setOpen(false); toast({ title: "Güncellendi" }); } });
@@ -226,6 +305,10 @@ export default function Risks() {
   function handleDelete(id: number) {
     deleteRisk.mutate({ id }, { onSuccess: () => { queryClient.invalidateQueries({ queryKey: getListRisksQueryKey(unitParam) }); toast({ title: "Silindi" }); } });
   }
+
+  const isEditing = editingId !== null;
+  const isRiskType = form.type === "risk";
+  const isAksiyon = form.responseType === "aksiyon";
 
   return (
     <div className="space-y-6">
@@ -265,6 +348,20 @@ export default function Risks() {
                         {r.type === "firsat" ? "Fırsat" : "Risk"}
                       </Badge>
                       <ScoreBadge score={r.score} type={r.type} />
+                      {r.responseType === "aksiyon" ? (
+                        <Badge variant="outline" className="border-violet-500/20 text-violet-400 bg-violet-500/10 gap-1 text-xs">
+                          <ClipboardList className="h-2.5 w-2.5" />Aksiyon
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="border-sky-500/20 text-sky-400 bg-sky-500/10 gap-1 text-xs">
+                          <Eye className="h-2.5 w-2.5" />İzleme
+                        </Badge>
+                      )}
+                      {r.targetScore != null && r.type === "risk" && (
+                        <Badge variant="outline" className="border-teal-500/20 text-teal-400 bg-teal-500/10 gap-1 text-xs">
+                          <Target className="h-2.5 w-2.5" />Hedef: {r.targetScore}
+                        </Badge>
+                      )}
                       <Badge variant="outline" className={r.status === "kapali" ? "border-green-500/20 text-green-400 bg-green-500/10" : "border-muted"}>
                         {r.status === "acik" ? "Açık" : r.status === "devam" ? "Devam Ediyor" : "Kapalı"}
                       </Badge>
@@ -276,11 +373,29 @@ export default function Risks() {
                     </div>
                     <p className="font-semibold text-sm mt-2">{r.title}</p>
                     {r.description && <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{r.description}</p>}
+                    {r.foreseenImpact && (
+                      <p className="text-xs text-amber-400/80 mt-1 line-clamp-1">
+                        <span className="font-medium text-amber-400/60">Öngörülebilir etki: </span>{r.foreseenImpact}
+                      </p>
+                    )}
+                    {r.occurrenceNote && (
+                      <p className="text-xs text-emerald-400/80 mt-1 line-clamp-1">
+                        <span className="font-medium text-emerald-400/60">Gerçekleşme: </span>{r.occurrenceNote}
+                      </p>
+                    )}
                     <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
                       <span>Olasılık: <strong>{r.probability}/5</strong></span>
                       <span>Etki: <strong>{r.severity}/5</strong></span>
+                      {r.targetScore != null && r.type === "risk" && (
+                        <span className="text-teal-400">Hedef Skor: <strong>{r.targetScore}</strong> ({r.targetProbability}×{r.targetSeverity})</span>
+                      )}
                       {r.owner && <span>Sorumlu: <strong>{r.owner}</strong></span>}
                     </div>
+                    {r.mitigationPlan && (
+                      <p className="text-xs text-muted-foreground/70 mt-1 line-clamp-1">
+                        <span className="font-medium">Eylem: </span>{r.mitigationPlan}
+                      </p>
+                    )}
                   </div>
                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
                     <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => openEdit(r)}><Pencil className="h-3.5 w-3.5" /></Button>
@@ -294,33 +409,61 @@ export default function Risks() {
       )}
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader><DialogTitle>{editingId !== null ? "Düzenle" : "Risk / Fırsat Ekle"}</DialogTitle></DialogHeader>
+        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{isEditing ? "Düzenle" : "Risk / Fırsat Ekle"}</DialogTitle>
+          </DialogHeader>
           <div className="space-y-4 py-2">
+
+            {/* Tür + Durum */}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>Tür</Label>
                 <Select value={form.type} onValueChange={v => setForm(f => ({ ...f, type: v }))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent><SelectItem value="risk">Risk</SelectItem><SelectItem value="firsat">Fırsat</SelectItem></SelectContent>
+                  <SelectContent>
+                    <SelectItem value="risk">Risk</SelectItem>
+                    <SelectItem value="firsat">Fırsat</SelectItem>
+                  </SelectContent>
                 </Select>
               </div>
               <div className="space-y-1.5">
                 <Label>Durum</Label>
                 <Select value={form.status} onValueChange={v => setForm(f => ({ ...f, status: v }))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent><SelectItem value="acik">Açık</SelectItem><SelectItem value="devam">Devam Ediyor</SelectItem><SelectItem value="kapali">Kapalı</SelectItem></SelectContent>
+                  <SelectContent>
+                    <SelectItem value="acik">Açık</SelectItem>
+                    <SelectItem value="devam">Devam Ediyor</SelectItem>
+                    <SelectItem value="kapali">Kapalı</SelectItem>
+                  </SelectContent>
                 </Select>
               </div>
             </div>
+
+            {/* Başlık */}
             <div className="space-y-1.5">
               <Label>Başlık *</Label>
               <Input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} />
             </div>
+
+            {/* Açıklama */}
             <div className="space-y-1.5">
               <Label>Açıklama</Label>
               <Textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} rows={2} />
             </div>
+
+            {/* Öngörülebilir Etki */}
+            <div className="space-y-1.5">
+              <Label>Öngörülebilir Etki</Label>
+              <Textarea
+                value={form.foreseenImpact}
+                onChange={e => setForm(f => ({ ...f, foreseenImpact: e.target.value }))}
+                placeholder="Bu risk/fırsatın öngörülebilir etkilerini açıklayın..."
+                rows={2}
+              />
+            </div>
+
+            {/* Olasılık */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label>Olasılık</Label>
@@ -328,6 +471,8 @@ export default function Risks() {
               </div>
               <Slider min={1} max={5} step={1} value={[form.probability]} onValueChange={([v]) => setForm(f => ({ ...f, probability: v }))} />
             </div>
+
+            {/* Etki */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label>Etki</Label>
@@ -335,32 +480,119 @@ export default function Risks() {
               </div>
               <Slider min={1} max={5} step={1} value={[form.severity]} onValueChange={([v]) => setForm(f => ({ ...f, severity: v }))} />
             </div>
+
+            {/* Sorumlu + Skor */}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>Sorumlu</Label>
                 <Input value={form.owner} onChange={e => setForm(f => ({ ...f, owner: e.target.value }))} placeholder="İsim / Birim" />
               </div>
-              {(() => {
-                const score = form.probability * form.severity;
-                const cfg = form.type === "firsat" ? opportunityMatrixConfig : riskMatrixConfig;
-                const grade = resolveGrade(score, cfg.grades);
-                return (
-                  <div className={`rounded-md p-3 flex flex-col items-center justify-center border ${grade.badgeStyle}`}>
-                    <p className="text-[10px] opacity-70 mb-0.5">Skor</p>
-                    <p className="text-2xl font-bold leading-none">{score}</p>
-                    <p className="text-[10px] mt-1 font-medium">{grade.shortLabel}</p>
+              <ScoreDisplay prob={form.probability} sev={form.severity} type={form.type} label="Mevcut Skor" />
+            </div>
+
+            {/* Yanıt Türü */}
+            <div className="space-y-2">
+              <Label>Yanıt Türü</Label>
+              <RadioGroup
+                value={form.responseType}
+                onValueChange={v => setForm(f => ({ ...f, responseType: v }))}
+                className="flex gap-6"
+              >
+                <div className="flex items-center gap-2">
+                  <RadioGroupItem value="aksiyon" id="resp-aksiyon" />
+                  <label htmlFor="resp-aksiyon" className="flex items-center gap-1.5 text-sm cursor-pointer">
+                    <ClipboardList className="h-3.5 w-3.5 text-violet-400" />
+                    Aksiyon
+                  </label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <RadioGroupItem value="izleme" id="resp-izleme" />
+                  <label htmlFor="resp-izleme" className="flex items-center gap-1.5 text-sm cursor-pointer">
+                    <Eye className="h-3.5 w-3.5 text-sky-400" />
+                    İzleme
+                  </label>
+                </div>
+              </RadioGroup>
+            </div>
+
+            {/* Aksiyon alanları */}
+            {isAksiyon && (
+              <>
+                {/* Eylem Planı (zorunlu) */}
+                <div className="space-y-1.5">
+                  <Label>Eylem Planı *</Label>
+                  <Textarea
+                    value={form.mitigationPlan}
+                    onChange={e => setForm(f => ({ ...f, mitigationPlan: e.target.value }))}
+                    placeholder="Uygulanacak eylem adımlarını açıklayın..."
+                    rows={3}
+                    className={!form.mitigationPlan.trim() ? "border-destructive/50 focus-visible:ring-destructive/30" : ""}
+                  />
+                  {!form.mitigationPlan.trim() && (
+                    <p className="text-[11px] text-destructive">Aksiyon seçildiğinde eylem planı zorunludur.</p>
+                  )}
+                </div>
+
+                {/* Hedeflenen Olasılık + Hedeflenen Etki + Hedeflenen Skor — sadece risk türü için */}
+                {isRiskType && (
+                  <div className="space-y-3 rounded-md border border-teal-500/20 bg-teal-500/5 p-3">
+                    <p className="text-xs font-semibold text-teal-400 flex items-center gap-1.5">
+                      <Target className="h-3.5 w-3.5" />
+                      Hedeflenen Risk Değerleri
+                    </p>
+
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-xs">Hedeflenen Olasılık</Label>
+                        <span className="text-xs font-semibold text-teal-400">{form.targetProbability}/5</span>
+                      </div>
+                      <Slider
+                        min={1} max={5} step={1}
+                        value={[form.targetProbability]}
+                        onValueChange={([v]) => setForm(f => ({ ...f, targetProbability: v }))}
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-xs">Hedeflenen Etki</Label>
+                        <span className="text-xs font-semibold text-teal-400">{form.targetSeverity}/5</span>
+                      </div>
+                      <Slider
+                        min={1} max={5} step={1}
+                        value={[form.targetSeverity]}
+                        onValueChange={([v]) => setForm(f => ({ ...f, targetSeverity: v }))}
+                      />
+                    </div>
+
+                    <ScoreDisplay prob={form.targetProbability} sev={form.targetSeverity} type="risk" label="Hedeflenen Skor" />
                   </div>
-                );
-              })()}
-            </div>
-            <div className="space-y-1.5">
-              <Label>Eylem Planı</Label>
-              <Textarea value={form.mitigationPlan} onChange={e => setForm(f => ({ ...f, mitigationPlan: e.target.value }))} placeholder="Risk azaltma / fırsat değerlendirme planı..." rows={2} />
-            </div>
+                )}
+              </>
+            )}
+
+            {/* Gerçekleşme Durumu — sadece düzenleme modunda + aksiyon varsa */}
+            {isEditing && isAksiyon && (
+              <div className="space-y-1.5 rounded-md border border-emerald-500/20 bg-emerald-500/5 p-3">
+                <Label className="text-xs font-semibold text-emerald-400 flex items-center gap-1.5">
+                  <ClipboardList className="h-3.5 w-3.5" />
+                  Gerçekleşme Durumu
+                </Label>
+                <Textarea
+                  value={form.occurrenceNote}
+                  onChange={e => setForm(f => ({ ...f, occurrenceNote: e.target.value }))}
+                  placeholder="Aksiyonun gerçekleşme durumu, uygulanan adımlar ve sonuçları hakkında bilgi girin..."
+                  rows={3}
+                />
+              </div>
+            )}
+
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>İptal</Button>
-            <Button onClick={handleSave} disabled={createRisk.isPending || updateRisk.isPending}>{editingId !== null ? "Güncelle" : "Ekle"}</Button>
+            <Button onClick={handleSave} disabled={createRisk.isPending || updateRisk.isPending}>
+              {isEditing ? "Güncelle" : "Ekle"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

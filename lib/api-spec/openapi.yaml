@@ -1347,6 +1347,9 @@ components:
           type: string
         description:
           type: ["string", "null"]
+        foreseenImpact:
+          type: ["string", "null"]
+          description: "Öngörülebilir etki"
         probability:
           type: integer
           description: "1-5"
@@ -1356,8 +1359,23 @@ components:
         score:
           type: integer
           description: "probability * severity"
+        responseType:
+          type: string
+          description: "aksiyon | izleme"
         mitigationPlan:
           type: ["string", "null"]
+        targetProbability:
+          type: ["integer", "null"]
+          description: "Hedeflenen olasılık (1-5, sadece risk+aksiyon)"
+        targetSeverity:
+          type: ["integer", "null"]
+          description: "Hedeflenen etki (1-5, sadece risk+aksiyon)"
+        targetScore:
+          type: ["integer", "null"]
+          description: "Hedeflenen risk skoru"
+        occurrenceNote:
+          type: ["string", "null"]
+          description: "Gerçekleşme durumu açıklaması"
         owner:
           type: ["string", "null"]
         status:
@@ -1378,11 +1396,23 @@ components:
           type: string
         description:
           type: string
+        foreseenImpact:
+          type: string
         probability:
           type: integer
         severity:
           type: integer
+        responseType:
+          type: string
         mitigationPlan:
+          type: string
+        targetProbability:
+          type: integer
+        targetSeverity:
+          type: integer
+        targetScore:
+          type: integer
+        occurrenceNote:
           type: string
         owner:
           type: string
@@ -1400,11 +1430,23 @@ components:
           type: string
         description:
           type: string
+        foreseenImpact:
+          type: string
         probability:
           type: integer
         severity:
           type: integer
+        responseType:
+          type: string
         mitigationPlan:
+          type: string
+        targetProbability:
+          type: integer
+        targetSeverity:
+          type: integer
+        targetScore:
+          type: integer
+        occurrenceNote:
           type: string
         owner:
           type: string
