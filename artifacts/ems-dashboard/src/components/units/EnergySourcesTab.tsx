@@ -47,7 +47,7 @@ export default function EnergySourcesTab({ unitId }: { unitId?: number }) {
   const EMPTY: ESForm = { unitId: effectiveUnitId?.toString() ?? "", type: "elektrik", name: "Elektrik", unit: "kWh", active: true };
   const [form, setForm] = useState<ESForm>(EMPTY);
 
-  const { data: allUnits } = useListUnits({ query: { queryKey: [...getListUnitsQueryKey(), companyId] } });
+  const { data: allUnits } = useListUnits({}, { query: { queryKey: [...getListUnitsQueryKey({}), companyId] } });
   const { data: allCompanies } = useListCompanies({ query: { queryKey: getListCompaniesQueryKey(), enabled: isSuperAdmin } });
 
   const qKey = ["energy-sources", effectiveUnitId, companyId];

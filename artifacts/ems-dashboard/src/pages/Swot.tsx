@@ -56,7 +56,7 @@ export default function Swot() {
   const [form, setForm] = useState<SwotForm>(EMPTY_FORM);
 
   const { data: items, isLoading } = useListSwotItems(unitParam, { query: { queryKey: getListSwotItemsQueryKey(unitParam) } });
-  const { data: allUnits } = useListUnits({ query: { queryKey: getListUnitsQueryKey(), enabled: isAdmin && unitId === null } });
+  const { data: allUnits } = useListUnits({}, { query: { queryKey: getListUnitsQueryKey({}), enabled: isAdmin && unitId === null } });
   const unitMap: Record<number, string> = Object.fromEntries((allUnits ?? []).map((u: any) => [u.id, u.name]));
   const createSwot = useCreateSwotItem();
   const updateSwot = useUpdateSwotItem();

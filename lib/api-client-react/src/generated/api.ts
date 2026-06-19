@@ -46,6 +46,7 @@ import type {
   ListSeuParams,
   ListSwotItemsParams,
   ListTargetsParams,
+  ListUnitsParams,
   ListWeatherParams,
   Meter,
   MeterInput,
@@ -163,20 +164,27 @@ export function useHealthCheck<TData = Awaited<ReturnType<typeof healthCheck>>, 
 
 
 
-export const getListUnitsUrl = () => {
+export const getListUnitsUrl = (params?: ListUnitsParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/api/units`
+  return stringifiedParams.length > 0 ? `/api/units?${stringifiedParams}` : `/api/units`
 }
 
 /**
  * @summary Tüm birimleri listele
  */
-export const listUnits = async ( options?: RequestInit): Promise<Unit[]> => {
+export const listUnits = async (params?: ListUnitsParams, options?: RequestInit): Promise<Unit[]> => {
 
-  return customFetch<Unit[]>(getListUnitsUrl(),
+  return customFetch<Unit[]>(getListUnitsUrl(params),
   {
     ...options,
     method: 'GET'
@@ -189,23 +197,23 @@ export const listUnits = async ( options?: RequestInit): Promise<Unit[]> => {
 
 
 
-export const getListUnitsQueryKey = () => {
+export const getListUnitsQueryKey = (params?: ListUnitsParams,) => {
     return [
-    `/api/units`
+    `/api/units`, ...(params ? [params] : [])
     ] as const;
     }
 
 
-export const getListUnitsQueryOptions = <TData = Awaited<ReturnType<typeof listUnits>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listUnits>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getListUnitsQueryOptions = <TData = Awaited<ReturnType<typeof listUnits>>, TError = ErrorType<unknown>>(params?: ListUnitsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listUnits>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
 
-  const queryKey =  queryOptions?.queryKey ?? getListUnitsQueryKey();
+  const queryKey =  queryOptions?.queryKey ?? getListUnitsQueryKey(params);
 
 
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof listUnits>>> = ({ signal }) => listUnits({ signal, ...requestOptions });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listUnits>>> = ({ signal }) => listUnits(params, { signal, ...requestOptions });
 
 
 
@@ -223,11 +231,11 @@ export type ListUnitsQueryError = ErrorType<unknown>
  */
 
 export function useListUnits<TData = Awaited<ReturnType<typeof listUnits>>, TError = ErrorType<unknown>>(
-  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listUnits>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+ params?: ListUnitsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listUnits>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
-  const queryOptions = getListUnitsQueryOptions(options)
+  const queryOptions = getListUnitsQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

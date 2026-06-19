@@ -74,11 +74,11 @@ router.get("/analysis/regression", requireAuth, async (req, res) => {
     }
 
     if (dataPoints.length < 2) {
-      return res.json({
+      res.json({
         slope: 0, intercept: 0, r2: 0,
         enpg: 0, enrc: 0, eei: 1,
         dataPoints: dataPoints.map(d => ({ ...d, predicted: d.actual })),
-      });
+      }); return;
     }
 
     const xs = dataPoints.map(d => d.hdd);

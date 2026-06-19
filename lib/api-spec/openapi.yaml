@@ -56,6 +56,12 @@ paths:
       operationId: listUnits
       tags: [units]
       summary: Tüm birimleri listele
+      parameters:
+        - name: companyId
+          in: query
+          required: false
+          schema:
+            type: integer
       responses:
         "200":
           description: OK

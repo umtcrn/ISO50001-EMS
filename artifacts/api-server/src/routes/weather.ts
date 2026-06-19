@@ -63,7 +63,7 @@ router.post("/weather", async (req, res) => {
   try {
     const { location, year } = req.body;
     if (!location || !year) {
-      return res.status(400).json({ error: "Lokasyon ve yıl zorunlu" });
+      res.status(400).json({ error: "Lokasyon ve yıl zorunlu" }); return;
     }
     const yr = parseInt(year);
     const baseline = getBaseline(location);

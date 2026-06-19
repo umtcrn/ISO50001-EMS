@@ -95,7 +95,7 @@ export default function Risks() {
   const [filterType, setFilterType] = useState("all");
 
   const { data: risks, isLoading } = useListRisks(unitParam, { query: { queryKey: getListRisksQueryKey(unitParam) } });
-  const { data: allUnits } = useListUnits({ query: { queryKey: getListUnitsQueryKey(), enabled: isAdmin && unitId === null } });
+  const { data: allUnits } = useListUnits({}, { query: { queryKey: getListUnitsQueryKey({}), enabled: isAdmin && unitId === null } });
   const unitMap: Record<number, string> = Object.fromEntries((allUnits ?? []).map((u: any) => [u.id, u.name]));
   const createRisk = useCreateRisk();
   const updateRisk = useUpdateRisk();

@@ -5,7 +5,7 @@ export interface AuthUser {
   id: number;
   username: string;
   name: string;
-  role: "admin" | "user";
+  role: "admin" | "user" | "superadmin";
   unitId: number | null;
 }
 

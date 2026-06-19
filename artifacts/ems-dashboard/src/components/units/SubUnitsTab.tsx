@@ -42,7 +42,7 @@ export default function SubUnitsTab({ unitId }: { unitId?: number }) {
   const EMPTY: SubUnitForm = { unitId: effectiveUnitId?.toString() ?? "", name: "", city: "İstanbul", description: "", active: true };
   const [form, setForm] = useState<SubUnitForm>(EMPTY);
 
-  const { data: allUnits } = useListUnits({ query: { queryKey: [...getListUnitsQueryKey(), companyId] } });
+  const { data: allUnits } = useListUnits({}, { query: { queryKey: [...getListUnitsQueryKey({}), companyId] } });
   const { data: allCompanies } = useListCompanies({ query: { queryKey: getListCompaniesQueryKey(), enabled: isSuperAdmin } });
 
   const qKey = ["sub-units", effectiveUnitId, companyId];

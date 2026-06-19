@@ -19,6 +19,10 @@ export const HealthCheckResponse = zod.object({
 /**
  * @summary Tüm birimleri listele
  */
+export const ListUnitsQueryParams = zod.object({
+  "companyId": zod.coerce.number().optional()
+})
+
 export const ListUnitsResponseItem = zod.object({
   "id": zod.number(),
   "name": zod.string(),

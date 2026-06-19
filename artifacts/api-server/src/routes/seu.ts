@@ -41,7 +41,7 @@ router.post("/seu", requireAuth, async (req, res) => {
     const { role, companyId: sessionCompanyId, unitId: sessionUnitId } = req.user!;
     const { name, category, annualKwh, percentage, priority, targetReductionPercent, responsible, notes, unitId } = req.body;
     if (!name || !category) {
-      return res.status(400).json({ error: "Zorunlu alanlar eksik" });
+      res.status(400).json({ error: "Zorunlu alanlar eksik" }); return;
     }
     const resolvedUnitId = role !== "admin" && role !== "superadmin" && sessionUnitId !== null
       ? sessionUnitId
@@ -69,12 +69,12 @@ router.patch("/seu/:id", requireAuth, async (req, res) => {
     const { role, companyId: sessionCompanyId, unitId: sessionUnitId } = req.user!;
     const id = parseInt(req.params.id as string);
     const [existing] = await db.select().from(seuTable).where(eq(seuTable.id, id));
-    if (!existing) return res.status(404).json({ error: "Bulunamadı" });
+    if (!existing) { res.status(404).json({ error: "Bulunamadı" }); return; }
     if (role !== "admin" && role !== "superadmin" && sessionUnitId !== null && existing.unitId !== sessionUnitId) {
-      return res.status(403).json({ error: "Yetki yok" });
+      res.status(403).json({ error: "Yetki yok" }); return;
     }
     if (role === "admin" && existing.companyId !== sessionCompanyId) {
-      return res.status(403).json({ error: "Bu kaydı düzenleme yetkiniz yok" });
+      res.status(403).json({ error: "Bu kaydı düzenleme yetkiniz yok" }); return;
     }
     const updates: Record<string, unknown> = {};
     const { name, category, annualKwh, percentage, priority, targetReductionPercent, responsible, notes, unitId } = req.body;

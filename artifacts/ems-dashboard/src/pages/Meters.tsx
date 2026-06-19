@@ -59,7 +59,7 @@ export default function Meters() {
   const isAdmin = user?.role === "admin" || user?.role === "superadmin";
   const effectiveUnitId = isAdmin ? undefined : (user?.unitId ?? undefined);
 
-  const { data: allUnits } = useListUnits({ query: { queryKey: getListUnitsQueryKey() } });
+  const { data: allUnits } = useListUnits({}, { query: { queryKey: getListUnitsQueryKey({}) } });
   const [selectedAdminUnit, setSelectedAdminUnit] = useState<string>("");
 
   const workingUnitId = isAdmin ? (selectedAdminUnit ? parseInt(selectedAdminUnit) : undefined) : effectiveUnitId;

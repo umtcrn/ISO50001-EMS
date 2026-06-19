@@ -58,11 +58,14 @@ router.post("/reports/generate", requireAuth, async (req, res) => {
       includeRegression: includeRegression !== false,
     }).returning();
 
-    const consumptionWhere = resolvedUnitId !== null
-      ? and(eq(consumptionTable.year, yr), eq(consumptionTable.unitId, resolvedUnitId))
-      : eq(consumptionTable.year, yr);
-
-    const consumptionRows = await db.select().from(consumptionTable).where(consumptionWhere);
+    // consumptionTable has no unitId directly — filter via meters join
+    const consumptionRows = resolvedUnitId !== null
+      ? await db
+          .select({ id: consumptionTable.id, meterId: consumptionTable.meterId, year: consumptionTable.year, month: consumptionTable.month, kwh: consumptionTable.kwh, tep: consumptionTable.tep, co2: consumptionTable.co2, hdd: consumptionTable.hdd, cdd: consumptionTable.cdd, notes: consumptionTable.notes, createdAt: consumptionTable.createdAt })
+          .from(consumptionTable)
+          .innerJoin(metersTable, eq(consumptionTable.meterId, metersTable.id))
+          .where(and(eq(consumptionTable.year, yr), eq(metersTable.unitId, resolvedUnitId)))
+      : await db.select().from(consumptionTable).where(eq(consumptionTable.year, yr));
     const meters = resolvedUnitId !== null
       ? await db.select().from(metersTable).where(eq(metersTable.unitId, resolvedUnitId))
       : await db.select().from(metersTable);

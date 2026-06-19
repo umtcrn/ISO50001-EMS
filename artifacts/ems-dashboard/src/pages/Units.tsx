@@ -130,11 +130,10 @@ function AdminUnitsTab() {
     }
   }
 
-  const unitsQKey = [...getListUnitsQueryKey(), companyId];
   const unitsParams = companyId !== null ? { companyId } : {};
   const { data: units, isLoading } = useListUnits(
-    unitsParams as any,
-    { query: { queryKey: unitsQKey } }
+    unitsParams,
+    { query: { queryKey: getListUnitsQueryKey(unitsParams) } }
   );
   const createUnit = useCreateUnit();
   const updateUnit = useUpdateUnit();
@@ -152,12 +151,12 @@ function AdminUnitsTab() {
     const data: any = { name: form.name, location: form.location, type: form.type, city: form.city, responsible: form.responsible || undefined, description: form.description || undefined, active: form.active, ...(companyId !== null ? { companyId } : {}) };
     if (editingId !== null) {
       updateUnit.mutate({ id: editingId, data }, {
-        onSuccess: () => { queryClient.invalidateQueries({ queryKey: unitsQKey }); setOpen(false); toast({ title: "Birim güncellendi" }); },
+        onSuccess: () => { queryClient.invalidateQueries({ queryKey: getListUnitsQueryKey(unitsParams) }); setOpen(false); toast({ title: "Birim güncellendi" }); },
         onError: () => toast({ title: "Hata oluştu", variant: "destructive" }),
       });
     } else {
       createUnit.mutate({ data }, {
-        onSuccess: () => { queryClient.invalidateQueries({ queryKey: unitsQKey }); setOpen(false); toast({ title: "Birim eklendi" }); },
+        onSuccess: () => { queryClient.invalidateQueries({ queryKey: getListUnitsQueryKey(unitsParams) }); setOpen(false); toast({ title: "Birim eklendi" }); },
         onError: () => toast({ title: "Hata oluştu", variant: "destructive" }),
       });
     }
@@ -166,7 +165,7 @@ function AdminUnitsTab() {
   function handleDelete(id: number) {
     if (!window.confirm("Bu birimi silmek istediğinizden emin misiniz?")) return;
     deleteUnit.mutate({ id }, {
-      onSuccess: () => { queryClient.invalidateQueries({ queryKey: unitsQKey }); toast({ title: "Birim silindi" }); },
+      onSuccess: () => { queryClient.invalidateQueries({ queryKey: getListUnitsQueryKey(unitsParams) }); toast({ title: "Birim silindi" }); },
       onError: () => toast({ title: "Silinemedi", variant: "destructive" }),
     });
   }
@@ -431,7 +430,7 @@ export default function Units() {
 
   const nonAdminUnitId = isAdmin ? undefined : (user?.unitId ?? undefined);
 
-  const { data: units } = useListUnits({ query: { queryKey: getListUnitsQueryKey() } });
+  const { data: units } = useListUnits({}, { query: { queryKey: getListUnitsQueryKey({}) } });
   const myUnit = nonAdminUnitId ? units?.find((u: any) => u.id === nonAdminUnitId) : null;
 
   const tabUnitId = isAdmin ? adminUnitFilter : nonAdminUnitId;

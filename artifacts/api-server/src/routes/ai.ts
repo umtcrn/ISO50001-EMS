@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, consumptionTable, seuTable } from "@workspace/db";
+import { db, consumptionTable, seuTable, metersTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { requireAuth } from "../middlewares/auth.js";
 
@@ -16,11 +16,12 @@ router.post("/ai/suggestions", requireAuth, async (req, res) => {
         ? user.unitId
         : (bodyUnitId !== undefined && bodyUnitId !== null ? parseInt(bodyUnitId) : null);
 
-    const consumptionWhere = resolvedUnitId !== null
-      ? and(eq(consumptionTable.year, yr), eq(consumptionTable.unitId, resolvedUnitId))
-      : eq(consumptionTable.year, yr);
-
-    const rows = await db.select().from(consumptionTable).where(consumptionWhere);
+    const rows = resolvedUnitId !== null
+      ? await db.select({ id: consumptionTable.id, kwh: consumptionTable.kwh, year: consumptionTable.year, month: consumptionTable.month, hdd: consumptionTable.hdd, cdd: consumptionTable.cdd, meterId: consumptionTable.meterId, tep: consumptionTable.tep, co2: consumptionTable.co2, notes: consumptionTable.notes, createdAt: consumptionTable.createdAt })
+          .from(consumptionTable)
+          .innerJoin(metersTable, eq(consumptionTable.meterId, metersTable.id))
+          .where(and(eq(consumptionTable.year, yr), eq(metersTable.unitId, resolvedUnitId)))
+      : await db.select().from(consumptionTable).where(eq(consumptionTable.year, yr));
 
     const seuItems = resolvedUnitId !== null
       ? await db.select().from(seuTable).where(eq(seuTable.unitId, resolvedUnitId)).orderBy(seuTable.priority)

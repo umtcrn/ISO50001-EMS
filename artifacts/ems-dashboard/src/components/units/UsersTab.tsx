@@ -37,7 +37,7 @@ export default function UsersTab({ unitFilter }: { unitFilter?: number }) {
 
   const isSuperAdmin = authUser?.role === "superadmin";
 
-  const { data: allUnits } = useListUnits({ query: { queryKey: [...getListUnitsQueryKey(), companyId] } });
+  const { data: allUnits } = useListUnits({}, { query: { queryKey: [...getListUnitsQueryKey({}), companyId] } });
   const { data: allCompanies } = useListCompanies({ query: { queryKey: getListCompaniesQueryKey(), enabled: isSuperAdmin } });
 
   const qKey = ["users", companyId];

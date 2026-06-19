@@ -45,7 +45,7 @@ export default function Seu() {
   const [form, setForm] = useState<SeuForm>(EMPTY);
 
   const { data: items, isLoading } = useListSeu(unitParam, { query: { queryKey: getListSeuQueryKey(unitParam) } });
-  const { data: allUnits } = useListUnits({ query: { queryKey: getListUnitsQueryKey(), enabled: isAdmin && unitId === null } });
+  const { data: allUnits } = useListUnits({}, { query: { queryKey: getListUnitsQueryKey({}), enabled: isAdmin && unitId === null } });
   const unitMap: Record<number, string> = Object.fromEntries((allUnits ?? []).map((u: any) => [u.id, u.name]));
   const createSeu = useCreateSeu();
   const updateSeu = useUpdateSeu();

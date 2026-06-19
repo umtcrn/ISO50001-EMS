@@ -34,6 +34,7 @@ export * from './listRisksParams';
 export * from './listSeuParams';
 export * from './listSwotItemsParams';
 export * from './listTargetsParams';
+export * from './listUnitsParams';
 export * from './listWeatherParams';
 export * from './meter';
 export * from './meterInput';

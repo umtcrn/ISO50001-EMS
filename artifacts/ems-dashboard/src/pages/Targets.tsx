@@ -162,8 +162,8 @@ export default function Targets() {
   const { data: targets, isLoading } = useListTargets(unitParam, {
     query: { queryKey: getListTargetsQueryKey(unitParam) },
   });
-  const { data: allUnits } = useListUnits({
-    query: { queryKey: getListUnitsQueryKey(), enabled: isAdmin && unitId === null },
+  const { data: allUnits } = useListUnits({}, {
+    query: { queryKey: getListUnitsQueryKey({}), enabled: isAdmin && unitId === null },
   });
   const unitMap: Record<number, string> = Object.fromEntries(
     (allUnits ?? []).map((u: any) => [u.id, u.name])

@@ -477,6 +477,10 @@ export interface CompanyUpdate {
   isActive?: boolean;
 }
 
+export type ListUnitsParams = {
+companyId?: number;
+};
+
 export type ListMetersParams = {
 unitId?: number;
 };
