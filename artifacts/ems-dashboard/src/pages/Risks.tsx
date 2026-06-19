@@ -338,12 +338,18 @@ export default function Risks() {
                 <Label>Sorumlu</Label>
                 <Input value={form.owner} onChange={e => setForm(f => ({ ...f, owner: e.target.value }))} placeholder="İsim / Birim" />
               </div>
-              <div className="bg-muted/30 rounded-md p-3 flex flex-col items-center justify-center">
-                <p className="text-xs text-muted-foreground">Risk Skoru</p>
-                <p className={`text-2xl font-bold ${form.probability * form.severity >= 15 ? "text-red-400" : form.probability * form.severity >= 8 ? "text-amber-400" : "text-green-400"}`}>
-                  {form.probability * form.severity}
-                </p>
-              </div>
+              {(() => {
+                const score = form.probability * form.severity;
+                const cfg = form.type === "firsat" ? opportunityMatrixConfig : riskMatrixConfig;
+                const grade = resolveGrade(score, cfg.grades);
+                return (
+                  <div className={`rounded-md p-3 flex flex-col items-center justify-center border ${grade.badgeStyle}`}>
+                    <p className="text-[10px] opacity-70 mb-0.5">Skor</p>
+                    <p className="text-2xl font-bold leading-none">{score}</p>
+                    <p className="text-[10px] mt-1 font-medium">{grade.shortLabel}</p>
+                  </div>
+                );
+              })()}
             </div>
             <div className="space-y-1.5">
               <Label>Eylem Planı</Label>
