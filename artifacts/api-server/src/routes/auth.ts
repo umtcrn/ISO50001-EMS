@@ -143,7 +143,7 @@ router.post("/users", requireAuth, async (req, res) => {
       res.status(403).json({ error: "Yetki yok" });
       return;
     }
-    const { username, password, name, role, unitId } = req.body;
+    const { username, password, name, role, unitId, companyId } = req.body;
     if (!username || !password || !name) {
       res.status(400).json({ error: "Zorunlu alanlar eksik" });
       return;
@@ -159,6 +159,7 @@ router.post("/users", requireAuth, async (req, res) => {
       name,
       role: role || "user",
       unitId: unitId ? parseInt(unitId) : null,
+      companyId: companyId ? parseInt(companyId) : 1,
       active: true,
     }).returning();
     res.status(201).json({

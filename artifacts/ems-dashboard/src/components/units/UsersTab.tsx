@@ -52,7 +52,7 @@ export default function UsersTab({ unitFilter }: { unitFilter?: number }) {
     : allUsers;
 
   const createMut = useMutation({
-    mutationFn: (d: UserForm) => API(token, "POST", { username: d.username, password: d.password, name: d.name, role: d.role, unitId: d.unitId || undefined }),
+    mutationFn: (d: UserForm) => API(token, "POST", { username: d.username, password: d.password, name: d.name, role: d.role, unitId: d.unitId || undefined, companyId: companyId ?? undefined }),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: qKey }); setOpen(false); toast({ title: "Kullanıcı oluşturuldu" }); },
     onError: (e: any) => toast({ title: e.message, variant: "destructive" }),
   });
