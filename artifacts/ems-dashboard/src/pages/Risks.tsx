@@ -171,10 +171,14 @@ function RiskOpportunityMatrices({ risks }: { risks: any[] }) {
   );
 }
 
-function ScoreBadge({ score }: { score: number }) {
-  const color = score >= 15 ? "bg-red-500/10 text-red-400 border-red-500/20" : score >= 8 ? "bg-amber-500/10 text-amber-400 border-amber-500/20" : "bg-green-500/10 text-green-400 border-green-500/20";
-  const label = score >= 15 ? "Kritik" : score >= 8 ? "Yüksek" : "Düşük";
-  return <Badge variant="outline" className={`text-xs ${color}`}>{label} ({score})</Badge>;
+function ScoreBadge({ score, type }: { score: number; type: string }) {
+  const config = type === "firsat" ? opportunityMatrixConfig : riskMatrixConfig;
+  const grade = resolveGrade(score, config.grades);
+  return (
+    <Badge variant="outline" className={`text-xs ${grade.badgeStyle}`}>
+      {grade.shortLabel} ({score})
+    </Badge>
+  );
 }
 
 export default function Risks() {
@@ -258,7 +262,7 @@ export default function Risks() {
                       <Badge variant="outline" className={r.type === "firsat" ? "border-blue-500/20 text-blue-400 bg-blue-500/10" : "border-red-500/20 text-red-400 bg-red-500/10"}>
                         {r.type === "firsat" ? "Fırsat" : "Risk"}
                       </Badge>
-                      <ScoreBadge score={r.score} />
+                      <ScoreBadge score={r.score} type={r.type} />
                       <Badge variant="outline" className={r.status === "kapali" ? "border-green-500/20 text-green-400 bg-green-500/10" : "border-muted"}>
                         {r.status === "acik" ? "Açık" : r.status === "devam" ? "Devam Ediyor" : "Kapalı"}
                       </Badge>
