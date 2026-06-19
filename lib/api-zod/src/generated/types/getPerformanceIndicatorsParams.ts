@@ -9,4 +9,5 @@
 export type GetPerformanceIndicatorsParams = {
 year?: number;
 unitId?: number;
+companyId?: number;
 };

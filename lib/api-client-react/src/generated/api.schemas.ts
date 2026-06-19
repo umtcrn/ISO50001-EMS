@@ -483,6 +483,7 @@ companyId?: number;
 
 export type ListMetersParams = {
 unitId?: number;
+companyId?: number;
 };
 
 export type ListConsumptionParams = {
@@ -499,42 +500,51 @@ export type GetRegressionAnalysisParams = {
 year?: number;
 meterId?: number;
 unitId?: number;
+companyId?: number;
 };
 
 export type GetPerformanceIndicatorsParams = {
 year?: number;
 unitId?: number;
+companyId?: number;
 };
 
 export type ListSwotItemsParams = {
 unitId?: number;
+companyId?: number;
 };
 
 export type ListTargetsParams = {
 unitId?: number;
+companyId?: number;
 };
 
 export type ListRisksParams = {
 unitId?: number;
+companyId?: number;
 };
 
 export type ListSeuParams = {
 unitId?: number;
+companyId?: number;
 };
 
 export type GetDashboardKpiParams = {
 year?: number;
 unitId?: number;
+companyId?: number;
 };
 
 export type GetMonthlyTrendParams = {
 year?: number;
 unitId?: number;
+companyId?: number;
 };
 
 export type GetSeuBreakdownParams = {
 year?: number;
 unitId?: number;
+companyId?: number;
 };
 
 export type GetSummaryParams = {

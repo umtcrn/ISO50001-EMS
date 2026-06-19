@@ -8,4 +8,5 @@
 
 export type ListSeuParams = {
 unitId?: number;
+companyId?: number;
 };

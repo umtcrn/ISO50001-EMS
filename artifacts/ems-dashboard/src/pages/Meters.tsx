@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useQueryClient, useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/context/AuthContext";
 import { useListUnits, getListUnitsQueryKey } from "@workspace/api-client-react";
+import { useCompany } from "@/context/CompanyContext";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -57,38 +58,51 @@ export default function Meters() {
   const [filterSource, setFilterSource] = useState("all");
 
   const isAdmin = user?.role === "admin" || user?.role === "superadmin";
+  const isSuperAdmin = user?.role === "superadmin";
   const effectiveUnitId = isAdmin ? undefined : (user?.unitId ?? undefined);
+  const { companyId } = useCompany();
 
   const { data: allUnits } = useListUnits({}, { query: { queryKey: getListUnitsQueryKey({}) } });
   const [selectedAdminUnit, setSelectedAdminUnit] = useState<string>("");
 
   const workingUnitId = isAdmin ? (selectedAdminUnit ? parseInt(selectedAdminUnit) : undefined) : effectiveUnitId;
 
-  const subUnitsKey = ["sub-units", workingUnitId];
+  const effectiveCompanyId = isSuperAdmin && !workingUnitId ? companyId : undefined;
+
+  const subUnitsKey = ["sub-units", workingUnitId, effectiveCompanyId];
   const { data: subUnits } = useQuery<SubUnit[]>({
     queryKey: subUnitsKey,
-    queryFn: () => apiFetch(token, workingUnitId ? `/api/sub-units?unitId=${workingUnitId}` : "/api/sub-units"),
-    enabled: workingUnitId !== undefined || !isAdmin,
+    queryFn: () => {
+      if (workingUnitId) return apiFetch(token, `/api/sub-units?unitId=${workingUnitId}`);
+      if (effectiveCompanyId) return apiFetch(token, `/api/sub-units?companyId=${effectiveCompanyId}`);
+      return apiFetch(token, "/api/sub-units");
+    },
+    enabled: workingUnitId !== undefined || effectiveCompanyId !== null || !isAdmin,
   });
 
-  const energySourcesKey = ["energy-sources", workingUnitId];
+  const energySourcesKey = ["energy-sources", workingUnitId, effectiveCompanyId];
   const { data: energySources } = useQuery<EnergySource[]>({
     queryKey: energySourcesKey,
-    queryFn: () => apiFetch(token, workingUnitId ? `/api/energy-sources?unitId=${workingUnitId}` : "/api/energy-sources"),
-    enabled: workingUnitId !== undefined || !isAdmin,
+    queryFn: () => {
+      if (workingUnitId) return apiFetch(token, `/api/energy-sources?unitId=${workingUnitId}`);
+      if (effectiveCompanyId) return apiFetch(token, `/api/energy-sources?companyId=${effectiveCompanyId}`);
+      return apiFetch(token, "/api/energy-sources");
+    },
+    enabled: workingUnitId !== undefined || effectiveCompanyId !== null || !isAdmin,
   });
 
-  const metersKey = ["meters", workingUnitId, filterSubUnit, filterSource];
+  const metersKey = ["meters", workingUnitId, effectiveCompanyId, filterSubUnit, filterSource];
   const { data: meters, isLoading } = useQuery<any[]>({
     queryKey: metersKey,
     queryFn: () => {
       const params = new URLSearchParams();
       if (workingUnitId) params.set("unitId", workingUnitId.toString());
+      else if (effectiveCompanyId) params.set("companyId", effectiveCompanyId.toString());
       if (filterSubUnit !== "all") params.set("subUnitId", filterSubUnit);
       if (filterSource !== "all") params.set("energySourceId", filterSource);
       return apiFetch(token, `/api/meters?${params}`);
     },
-    enabled: workingUnitId !== undefined || !isAdmin,
+    enabled: workingUnitId !== undefined || effectiveCompanyId !== null || !isAdmin,
   });
 
   const createMut = useMutation({

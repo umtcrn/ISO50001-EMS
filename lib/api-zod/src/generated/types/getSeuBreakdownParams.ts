@@ -9,4 +9,5 @@
 export type GetSeuBreakdownParams = {
 year?: number;
 unitId?: number;
+companyId?: number;
 };

@@ -9,4 +9,5 @@
 export type GetMonthlyTrendParams = {
 year?: number;
 unitId?: number;
+companyId?: number;
 };

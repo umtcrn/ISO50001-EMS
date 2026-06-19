@@ -1,5 +1,6 @@
 import { useYear } from "@/context/YearContext";
 import { useUnit } from "@/context/UnitContext";
+import { useCompany } from "@/context/CompanyContext";
 import { useAuth } from "@/context/AuthContext";
 import { useState } from "react";
 import {
@@ -34,23 +35,24 @@ function MetricCard({ label, value, unit, info, good }: { label: string; value: 
 export default function Analysis() {
   const { year } = useYear();
   const { unitId } = useUnit();
+  const { companyId } = useCompany();
   const { user } = useAuth();
   const isAdmin = user?.role === "admin" || user?.role === "superadmin";
   const [meterId, setMeterId] = useState<string>("all");
 
-  const unitParam = unitId !== null ? { unitId } : undefined;
+  const unitParam = unitId !== null ? { unitId } : companyId !== null ? { companyId } : undefined;
   const { data: meters } = useListMeters(unitParam, { query: { queryKey: getListMetersQueryKey(unitParam) } });
 
   const regParams = {
     year,
     ...(meterId !== "all" ? { meterId: parseInt(meterId) } : {}),
-    ...(unitId !== null ? { unitId } : {}),
+    ...(unitId !== null ? { unitId } : companyId !== null ? { companyId } : {}),
   };
   const { data: regression, isLoading: regLoading } = useGetRegressionAnalysis(regParams, {
     query: { queryKey: getGetRegressionAnalysisQueryKey(regParams) },
   });
 
-  const perfParams = { year, ...(unitId !== null ? { unitId } : {}) };
+  const perfParams = { year, ...(unitId !== null ? { unitId } : companyId !== null ? { companyId } : {}) };
   const { data: perf, isLoading: perfLoading } = useGetPerformanceIndicators(perfParams, {
     query: { queryKey: getGetPerformanceIndicatorsQueryKey(perfParams) },
   });

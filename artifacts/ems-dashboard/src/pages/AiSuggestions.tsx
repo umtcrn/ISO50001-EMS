@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useGetAiSuggestions } from "@workspace/api-client-react";
 import { useYear } from "@/context/YearContext";
 import { useUnit } from "@/context/UnitContext";
+import { useCompany } from "@/context/CompanyContext";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -25,6 +26,7 @@ const PRIORITY_CONFIG: Record<string, { label: string; color: string }> = {
 export default function AiSuggestions() {
   const { year } = useYear();
   const { unitId } = useUnit();
+  const { companyId } = useCompany();
   const [focus, setFocus] = useState("genel");
   const [triggered, setTriggered] = useState(false);
 
@@ -32,14 +34,14 @@ export default function AiSuggestions() {
 
   useEffect(() => {
     setTriggered(false);
-  }, [unitId]);
+  }, [unitId, companyId]);
 
   function handleGet() {
     setTriggered(true);
     getSuggestions.mutate({
       data: {
         focus,
-        ...(unitId !== null ? { unitId } : {}),
+        ...(unitId !== null ? { unitId } : companyId !== null ? { companyId } : {}),
       } as any,
     });
   }

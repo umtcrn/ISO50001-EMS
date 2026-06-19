@@ -1,6 +1,7 @@
 import { useState, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useUnit } from "@/context/UnitContext";
+import { useCompany } from "@/context/CompanyContext";
 import { useAuth } from "@/context/AuthContext";
 import { useListRisks, useCreateRisk, useUpdateRisk, useDeleteRisk, getListRisksQueryKey, useListUnits, getListUnitsQueryKey } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -185,9 +186,10 @@ export default function Risks() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { unitId } = useUnit();
+  const { companyId } = useCompany();
   const { user } = useAuth();
   const isAdmin = user?.role === "admin" || user?.role === "superadmin";
-  const unitParam = unitId !== null ? { unitId } : undefined;
+  const unitParam = unitId !== null ? { unitId } : companyId !== null ? { companyId } : undefined;
 
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);

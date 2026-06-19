@@ -1,5 +1,6 @@
 import { useYear } from "@/context/YearContext";
 import { useUnit } from "@/context/UnitContext";
+import { useCompany } from "@/context/CompanyContext";
 import {
   useGetDashboardKpi,
   useGetMonthlyTrend,
@@ -80,10 +81,11 @@ function fmt(n: number | null | undefined, dec = 1) {
 export default function Dashboard() {
   const { year } = useYear();
   const { unitId } = useUnit();
+  const { companyId } = useCompany();
   const [, navigate] = useLocation();
 
-  const params = unitId !== null ? { year, unitId } : { year };
-  const targetParams = unitId !== null ? { unitId } : undefined;
+  const params = unitId !== null ? { year, unitId } : companyId !== null ? { year, companyId } : { year };
+  const targetParams = unitId !== null ? { unitId } : companyId !== null ? { companyId } : undefined;
 
   const { data: kpi, isLoading: kpiLoading } = useGetDashboardKpi(params, {
     query: { queryKey: getGetDashboardKpiQueryKey(params) },

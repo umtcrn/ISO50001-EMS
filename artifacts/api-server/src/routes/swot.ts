@@ -19,9 +19,11 @@ router.get("/swot", requireAuth, async (req, res) => {
       const unitId = req.query.unitId ? parseInt(req.query.unitId as string) : undefined;
       if (unitId !== undefined) conditions.push(eq(swotTable.unitId, unitId));
     } else {
-      // Superadmin: isteğe bağlı unitId filtresi
+      // Superadmin: isteğe bağlı unitId + companyId filtresi
       const unitId = req.query.unitId ? parseInt(req.query.unitId as string) : undefined;
       if (unitId !== undefined) conditions.push(eq(swotTable.unitId, unitId));
+      const companyId = req.query.companyId ? parseInt(req.query.companyId as string) : undefined;
+      if (companyId !== undefined) conditions.push(eq(swotTable.companyId, companyId));
     }
 
     const items = conditions.length > 0

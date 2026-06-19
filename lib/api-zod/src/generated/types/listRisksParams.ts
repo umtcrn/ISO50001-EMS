@@ -8,4 +8,5 @@
 
 export type ListRisksParams = {
 unitId?: number;
+companyId?: number;
 };

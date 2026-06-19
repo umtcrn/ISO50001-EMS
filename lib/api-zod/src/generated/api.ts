@@ -113,7 +113,8 @@ export const DeleteUnitParams = zod.object({
  * @summary Tüm sayaçları listele
  */
 export const ListMetersQueryParams = zod.object({
-  "unitId": zod.coerce.number().optional()
+  "unitId": zod.coerce.number().optional(),
+  "companyId": zod.coerce.number().optional()
 })
 
 export const ListMetersResponseItem = zod.object({
@@ -326,7 +327,8 @@ export const FetchWeatherDataResponse = zod.array(FetchWeatherDataResponseItem)
 export const GetRegressionAnalysisQueryParams = zod.object({
   "year": zod.coerce.number().optional(),
   "meterId": zod.coerce.number().optional(),
-  "unitId": zod.coerce.number().optional()
+  "unitId": zod.coerce.number().optional(),
+  "companyId": zod.coerce.number().optional()
 })
 
 export const GetRegressionAnalysisResponse = zod.object({
@@ -350,7 +352,8 @@ export const GetRegressionAnalysisResponse = zod.object({
  */
 export const GetPerformanceIndicatorsQueryParams = zod.object({
   "year": zod.coerce.number().optional(),
-  "unitId": zod.coerce.number().optional()
+  "unitId": zod.coerce.number().optional(),
+  "companyId": zod.coerce.number().optional()
 })
 
 export const GetPerformanceIndicatorsResponse = zod.object({
@@ -370,7 +373,8 @@ export const GetPerformanceIndicatorsResponse = zod.object({
  * @summary SWOT maddeleri listesi
  */
 export const ListSwotItemsQueryParams = zod.object({
-  "unitId": zod.coerce.number().optional()
+  "unitId": zod.coerce.number().optional(),
+  "companyId": zod.coerce.number().optional()
 })
 
 export const ListSwotItemsResponseItem = zod.object({
@@ -439,7 +443,8 @@ export const DeleteSwotItemParams = zod.object({
  * @summary Enerji hedeflerini listele (ilerleme dahil)
  */
 export const ListTargetsQueryParams = zod.object({
-  "unitId": zod.coerce.number().optional()
+  "unitId": zod.coerce.number().optional(),
+  "companyId": zod.coerce.number().optional()
 })
 
 export const ListTargetsResponseItem = zod.object({
@@ -514,7 +519,8 @@ export const DeleteTargetParams = zod.object({
  * @summary Risk ve fırsatlar listesi
  */
 export const ListRisksQueryParams = zod.object({
-  "unitId": zod.coerce.number().optional()
+  "unitId": zod.coerce.number().optional(),
+  "companyId": zod.coerce.number().optional()
 })
 
 export const ListRisksResponseItem = zod.object({
@@ -597,7 +603,8 @@ export const DeleteRiskParams = zod.object({
  * @summary Önemli enerji kullanımları listesi
  */
 export const ListSeuQueryParams = zod.object({
-  "unitId": zod.coerce.number().optional()
+  "unitId": zod.coerce.number().optional(),
+  "companyId": zod.coerce.number().optional()
 })
 
 export const ListSeuResponseItem = zod.object({
@@ -679,7 +686,8 @@ export const DeleteSeuParams = zod.object({
  */
 export const GetDashboardKpiQueryParams = zod.object({
   "year": zod.coerce.number().optional(),
-  "unitId": zod.coerce.number().optional()
+  "unitId": zod.coerce.number().optional(),
+  "companyId": zod.coerce.number().optional()
 })
 
 export const GetDashboardKpiResponse = zod.object({
@@ -700,7 +708,8 @@ export const GetDashboardKpiResponse = zod.object({
  */
 export const GetMonthlyTrendQueryParams = zod.object({
   "year": zod.coerce.number().optional(),
-  "unitId": zod.coerce.number().optional()
+  "unitId": zod.coerce.number().optional(),
+  "companyId": zod.coerce.number().optional()
 })
 
 export const GetMonthlyTrendResponseItem = zod.object({
@@ -720,7 +729,8 @@ export const GetMonthlyTrendResponse = zod.array(GetMonthlyTrendResponseItem)
  */
 export const GetSeuBreakdownQueryParams = zod.object({
   "year": zod.coerce.number().optional(),
-  "unitId": zod.coerce.number().optional()
+  "unitId": zod.coerce.number().optional(),
+  "companyId": zod.coerce.number().optional()
 })
 
 export const GetSeuBreakdownResponseItem = zod.object({

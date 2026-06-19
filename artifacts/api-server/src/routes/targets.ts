@@ -58,6 +58,8 @@ router.get("/targets", requireAuth, async (req, res) => {
     } else {
       const unitId = req.query.unitId ? parseInt(req.query.unitId as string) : undefined;
       if (unitId !== undefined) conditions.push(eq(energyTargetsTable.unitId, unitId));
+      const companyId = req.query.companyId ? parseInt(req.query.companyId as string) : undefined;
+      if (companyId !== undefined) conditions.push(eq(energyTargetsTable.companyId, companyId));
     }
 
     const targets = conditions.length > 0

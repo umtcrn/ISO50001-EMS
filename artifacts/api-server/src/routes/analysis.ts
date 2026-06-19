@@ -30,11 +30,12 @@ router.get("/analysis/regression", requireAuth, async (req, res) => {
     const year = req.query.year ? parseInt(req.query.year as string) : new Date().getFullYear();
     const meterId = req.query.meterId ? parseInt(req.query.meterId as string) : undefined;
 
-    // Normal kullanıcı: kendi birimi; admin: kendi firması; superadmin: tümü
+    // Normal kullanıcı: kendi birimi; admin: kendi firması; superadmin: query'den
     const effectiveUnitId = role !== "admin" && role !== "superadmin" && sessionUnitId !== null
       ? sessionUnitId
       : undefined;
-    const effectiveCompanyId = role === "admin" ? sessionCompanyId : undefined;
+    const queryCompanyId = req.query.companyId ? parseInt(req.query.companyId as string) : undefined;
+    const effectiveCompanyId = role === "admin" ? sessionCompanyId : queryCompanyId;
 
     let consumptionRows = await db
       .select({
@@ -121,7 +122,8 @@ router.get("/analysis/performance", requireAuth, async (req, res) => {
     const effectiveUnitId = role !== "admin" && role !== "superadmin" && sessionUnitId !== null
       ? sessionUnitId
       : undefined;
-    const effectiveCompanyId = role === "admin" ? sessionCompanyId : undefined;
+    const queryCompanyId = req.query.companyId ? parseInt(req.query.companyId as string) : undefined;
+    const effectiveCompanyId = role === "admin" ? sessionCompanyId : queryCompanyId;
 
     const filterByUnit = async (y: number) => {
       const conds: SQL[] = [eq(consumptionTable.year, y)];

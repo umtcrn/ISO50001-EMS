@@ -21,8 +21,9 @@ router.get("/dashboard/kpi", requireAuth, async (req, res) => {
     const year = req.query.year ? parseInt(req.query.year as string) : new Date().getFullYear();
     const unitId = req.query.unitId ? parseInt(req.query.unitId as string) : undefined;
 
-    // Admin: kendi firması; superadmin: tümü
-    const effectiveCompanyId = role === "admin" ? sessionCompanyId : undefined;
+    // Admin: kendi firması; superadmin: query'den
+    const queryCompanyId = req.query.companyId ? parseInt(req.query.companyId as string) : undefined;
+    const effectiveCompanyId = role === "admin" ? sessionCompanyId : queryCompanyId;
 
     const currConds = buildConsumptionConditions(year, unitId, effectiveCompanyId);
     const prevConds = buildConsumptionConditions(year - 1, unitId, effectiveCompanyId);
@@ -90,7 +91,8 @@ router.get("/dashboard/monthly-trend", requireAuth, async (req, res) => {
     const { role, companyId: sessionCompanyId } = req.user!;
     const year = req.query.year ? parseInt(req.query.year as string) : new Date().getFullYear();
     const unitId = req.query.unitId ? parseInt(req.query.unitId as string) : undefined;
-    const effectiveCompanyId = role === "admin" ? sessionCompanyId : undefined;
+    const queryCompanyId2 = req.query.companyId ? parseInt(req.query.companyId as string) : undefined;
+    const effectiveCompanyId = role === "admin" ? sessionCompanyId : queryCompanyId2;
 
     const conds = buildConsumptionConditions(year, unitId, effectiveCompanyId);
     const rows = await db
@@ -137,7 +139,8 @@ router.get("/dashboard/seu-breakdown", requireAuth, async (req, res) => {
     const { role, companyId: sessionCompanyId } = req.user!;
     const year = req.query.year ? parseInt(req.query.year as string) : new Date().getFullYear();
     const unitId = req.query.unitId ? parseInt(req.query.unitId as string) : undefined;
-    const effectiveCompanyId = role === "admin" ? sessionCompanyId : undefined;
+    const queryCompanyId3 = req.query.companyId ? parseInt(req.query.companyId as string) : undefined;
+    const effectiveCompanyId = role === "admin" ? sessionCompanyId : queryCompanyId3;
 
     const seuConds: SQL[] = [];
     if (unitId !== undefined) seuConds.push(eq(seuTable.unitId, unitId));

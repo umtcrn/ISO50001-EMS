@@ -8,4 +8,5 @@
 
 export type ListTargetsParams = {
 unitId?: number;
+companyId?: number;
 };

@@ -10,4 +10,5 @@ export type GetRegressionAnalysisParams = {
 year?: number;
 meterId?: number;
 unitId?: number;
+companyId?: number;
 };

@@ -8,4 +8,5 @@
 
 export type ListMetersParams = {
 unitId?: number;
+companyId?: number;
 };

@@ -19,6 +19,8 @@ router.get("/seu", requireAuth, async (req, res) => {
     } else {
       const unitId = req.query.unitId ? parseInt(req.query.unitId as string) : undefined;
       if (unitId !== undefined) conditions.push(eq(seuTable.unitId, unitId));
+      const companyId = req.query.companyId ? parseInt(req.query.companyId as string) : undefined;
+      if (companyId !== undefined) conditions.push(eq(seuTable.companyId, companyId));
     }
 
     const items = conditions.length > 0

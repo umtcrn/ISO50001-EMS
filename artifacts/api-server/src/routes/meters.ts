@@ -12,6 +12,7 @@ router.get("/meters", requireAuth, async (req, res) => {
     const unitId = req.query.unitId ? parseInt(req.query.unitId as string) : undefined;
     const subUnitId = req.query.subUnitId ? parseInt(req.query.subUnitId as string) : undefined;
     const energySourceId = req.query.energySourceId ? parseInt(req.query.energySourceId as string) : undefined;
+    const companyId = req.query.companyId ? parseInt(req.query.companyId as string) : undefined;
 
     const rows = await db
       .select({
@@ -40,6 +41,8 @@ router.get("/meters", requireAuth, async (req, res) => {
       if (role !== "admin" && role !== "superadmin" && sessionUnitId !== null && m.unitId !== sessionUnitId) return false;
       // Admin: sadece kendi firması
       if (role === "admin" && m.companyId !== sessionCompanyId) return false;
+      // Superadmin: seçili firma filtresi
+      if (role === "superadmin" && companyId !== undefined && m.companyId !== companyId) return false;
       // Ek filtreler
       if (unitId !== undefined && m.unitId !== unitId) return false;
       if (subUnitId !== undefined && m.subUnitId !== subUnitId) return false;

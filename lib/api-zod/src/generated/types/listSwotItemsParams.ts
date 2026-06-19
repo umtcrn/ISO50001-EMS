@@ -8,4 +8,5 @@
 
 export type ListSwotItemsParams = {
 unitId?: number;
+companyId?: number;
 };

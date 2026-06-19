@@ -9,4 +9,5 @@
 export type GetDashboardKpiParams = {
 year?: number;
 unitId?: number;
+companyId?: number;
 };

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useUnit } from "@/context/UnitContext";
+import { useCompany } from "@/context/CompanyContext";
 import { useAuth } from "@/context/AuthContext";
 import {
   useListSwotItems, useCreateSwotItem, useUpdateSwotItem, useDeleteSwotItem,
@@ -47,9 +48,10 @@ export default function Swot() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { unitId } = useUnit();
+  const { companyId } = useCompany();
   const { user } = useAuth();
   const isAdmin = user?.role === "admin" || user?.role === "superadmin";
-  const unitParam = unitId !== null ? { unitId } : undefined;
+  const unitParam = unitId !== null ? { unitId } : companyId !== null ? { companyId } : undefined;
 
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
