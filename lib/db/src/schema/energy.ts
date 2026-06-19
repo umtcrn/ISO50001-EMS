@@ -175,7 +175,6 @@ export const risksTable = pgTable("risks", {
   targetProbability: integer("target_probability"),
   targetSeverity: integer("target_severity"),
   targetScore: integer("target_score"),
-  occurrenceNote: text("occurrence_note"),
   owner: text("owner"),
   status: text("status").notNull().default("acik"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -184,6 +183,21 @@ export const risksTable = pgTable("risks", {
 export const insertRiskSchema = createInsertSchema(risksTable).omit({ id: true, createdAt: true });
 export type InsertRisk = z.infer<typeof insertRiskSchema>;
 export type RiskItem = typeof risksTable.$inferSelect;
+
+// ── Risk Notes (Gerçekleşme Notları) ─────────────────────
+export const riskNotesTable = pgTable("risk_notes", {
+  id: serial("id").primaryKey(),
+  companyId: integer("company_id").references(() => companiesTable.id).notNull().default(1),
+  riskId: integer("risk_id").references(() => risksTable.id, { onDelete: "cascade" }).notNull(),
+  userId: integer("user_id").references(() => usersTable.id, { onDelete: "set null" }),
+  userName: text("user_name").notNull(),
+  content: text("content").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertRiskNoteSchema = createInsertSchema(riskNotesTable).omit({ id: true, createdAt: true });
+export type InsertRiskNote = z.infer<typeof insertRiskNoteSchema>;
+export type RiskNote = typeof riskNotesTable.$inferSelect;
 
 // ── SEU / ÖEK ────────────────────────────────────────────
 export const seuTable = pgTable("seu_items", {

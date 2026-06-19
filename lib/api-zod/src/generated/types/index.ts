@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './addRiskNoteBody';
 export * from './aiSuggestion';
 export * from './aiSuggestionRequest';
 export * from './aiSuggestionResponse';
@@ -48,6 +49,7 @@ export * from './reportRequest';
 export * from './reportResult';
 export * from './riskInput';
 export * from './riskItem';
+export * from './riskNote';
 export * from './riskUpdate';
 export * from './seuBreakdownPoint';
 export * from './seuInput';
@@ -61,5 +63,6 @@ export * from './swotUpdate';
 export * from './unit';
 export * from './unitInput';
 export * from './unitUpdate';
+export * from './updateRiskNoteBody';
 export * from './weatherFetchRequest';
 export * from './weatherRecord';

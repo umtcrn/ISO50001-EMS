@@ -201,6 +201,16 @@ export interface SwotUpdate {
   impact?: string;
 }
 
+export interface RiskNote {
+  id: number;
+  riskId: number;
+  /** @nullable */
+  userId?: number | null;
+  userName: string;
+  content: string;
+  createdAt: string;
+}
+
 export interface RiskItem {
   id: number;
   /** @nullable */
@@ -240,11 +250,7 @@ export interface RiskItem {
      * @nullable
      */
   targetScore?: number | null;
-  /**
-     * Gerçekleşme durumu açıklaması
-     * @nullable
-     */
-  occurrenceNote?: string | null;
+  notes?: RiskNote[];
   /** @nullable */
   owner?: string | null;
   /** acik | devam | kapali */
@@ -265,7 +271,6 @@ export interface RiskInput {
   targetProbability?: number;
   targetSeverity?: number;
   targetScore?: number;
-  occurrenceNote?: string;
   owner?: string;
   status?: string;
 }
@@ -283,7 +288,6 @@ export interface RiskUpdate {
   targetProbability?: number;
   targetSeverity?: number;
   targetScore?: number;
-  occurrenceNote?: string;
   owner?: string;
   status?: string;
 }
@@ -561,6 +565,14 @@ companyId?: number;
 export type ListRisksParams = {
 unitId?: number;
 companyId?: number;
+};
+
+export type AddRiskNoteBody = {
+  content: string;
+};
+
+export type UpdateRiskNoteBody = {
+  content: string;
 };
 
 export type ListSeuParams = {

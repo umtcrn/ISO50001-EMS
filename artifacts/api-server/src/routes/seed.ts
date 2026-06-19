@@ -10,6 +10,7 @@ import {
   consumptionTable,
   swotTable,
   risksTable,
+  riskNotesTable,
   seuTable,
   energyTargetsTable,
 } from "@workspace/db";
@@ -203,7 +204,7 @@ router.post("/admin/seed", requireAuth, requireAdmin, async (req, res) => {
     ]);
 
     // ── Riskler ─────────────────────────────────────────────────────────────
-    await db.insert(risksTable).values([
+    const demoRisks = await db.insert(risksTable).values([
       {
         unitId: units[0].id, type: "risk", title: "Transformatör Arızası",
         description: "Ana trafonun ömrü dolmaya yaklaşıyor",
@@ -212,7 +213,6 @@ router.post("/admin/seed", requireAuth, requireAdmin, async (req, res) => {
         responseType: "aksiyon",
         mitigationPlan: "Yedek trafo temin planlanıyor; Q1'de sipariş verilecek, Q2'de kurulum tamamlanacak",
         targetProbability: 1, targetSeverity: 5, targetScore: 5,
-        occurrenceNote: "Mart ayında yapılan termografi ölçümünde sıcak nokta tespit edildi. Yedek trafo siparişi verildi.",
         owner: "Elektrik Bakım", status: "devam", companyId,
       },
       {
@@ -222,7 +222,6 @@ router.post("/admin/seed", requireAuth, requireAdmin, async (req, res) => {
         probability: 5, severity: 3, score: 15,
         responseType: "aksiyon",
         mitigationPlan: "Kondansatör bankaları kurulumu — mühendislik hesabı tamamlandı, ihale aşamasında",
-        occurrenceNote: "Nisan faturasında reaktif güç bedeli %12 azaldı. Kondansatör kurulumu devam ediyor.",
         owner: "Elektrik Bakım", status: "devam", companyId,
       },
       {
@@ -233,7 +232,6 @@ router.post("/admin/seed", requireAuth, requireAdmin, async (req, res) => {
         responseType: "aksiyon",
         mitigationPlan: "Yedek klima ünitesi kurulumu ve sıcaklık alarm sistemi devreye alınacak",
         targetProbability: 1, targetSeverity: 5, targetScore: 5,
-        occurrenceNote: "Yedek klima ünitesi kuruldu, alarm sistemi test edildi. İzleme aşamasına geçildi.",
         owner: "IT Altyapı", status: "devam", companyId,
       },
       {
@@ -243,7 +241,6 @@ router.post("/admin/seed", requireAuth, requireAdmin, async (req, res) => {
         probability: 4, severity: 3, score: 12,
         responseType: "aksiyon",
         mitigationPlan: "Kazan modernizasyonu ihaleye çıkarılacak; teknik şartname hazırlandı",
-        occurrenceNote: null,
         owner: "Teknik Servis", status: "acik", companyId,
       },
       {
@@ -254,7 +251,6 @@ router.post("/admin/seed", requireAuth, requireAdmin, async (req, res) => {
         responseType: "aksiyon",
         mitigationPlan: "6 aylık periyodik bakım ve elektronik kaçak testi programı oluşturuldu",
         targetProbability: 1, targetSeverity: 4, targetScore: 4,
-        occurrenceNote: "Mayıs bakımında A Blok'ta küçük kaçak tespit edilip giderildi. Periyodik test takvimi güncellendi.",
         owner: "Soğutma Bakım", status: "devam", companyId,
       },
       {
@@ -264,7 +260,6 @@ router.post("/admin/seed", requireAuth, requireAdmin, async (req, res) => {
         probability: 4, severity: 4, score: 16,
         responseType: "aksiyon",
         mitigationPlan: "Fizibilite çalışması başlatıldı; hesaplama raporunun tamamlanması bekleniyor",
-        occurrenceNote: null,
         owner: "Proje Departmanı", status: "acik", companyId,
       },
       {
@@ -285,7 +280,50 @@ router.post("/admin/seed", requireAuth, requireAdmin, async (req, res) => {
         mitigationPlan: null,
         owner: "Tesis Yönetimi", status: "acik", companyId,
       },
-    ]);
+    ]).returning();
+
+    // ── Risk Gerçekleşme Notları ─────────────────────────────────────────────
+    const adminUserRow = await db.select().from(usersTable).where(eq(usersTable.username, "admin")).limit(1);
+    const adminId = adminUserRow[0]?.id ?? null;
+    const adminName = adminUserRow[0]?.name ?? "Admin";
+    const [rTrafo, rReaktif, rVeriMerkezi, , rFreon, rTermal] = demoRisks;
+
+    const demoNotes: { riskId: number; userName: string; userId: number | null; content: string; companyId: number }[] = [];
+
+    if (rTrafo) {
+      demoNotes.push(
+        { riskId: rTrafo.id, userId: adminId, userName: adminName, content: "Mart ayında yapılan termografi ölçümünde sıcak nokta tespit edildi. Trafo içi sıcaklık alarmı devreye alındı.", companyId },
+        { riskId: rTrafo.id, userId: adminId, userName: adminName, content: "Yedek trafo için üç tekliften en düşüğü seçildi. Sipariş 15 Nisan'da verildi; teslim süresi 6 hafta.", companyId },
+        { riskId: rTrafo.id, userId: adminId, userName: "Mehmet Yılmaz", content: "Yedek trafo 28 Mayıs'ta teslim alındı. Kurulum ekibinin takvime göre Haziran 2. haftasına planlandı.", companyId },
+      );
+    }
+    if (rReaktif) {
+      demoNotes.push(
+        { riskId: rReaktif.id, userId: adminId, userName: adminName, content: "Nisan faturasında reaktif güç bedeli %12 azaldı. Kondansatör banka 1 devreye girdi.", companyId },
+        { riskId: rReaktif.id, userId: adminId, userName: "Mehmet Yılmaz", content: "Kondansatör banka 2 kurulumu tamamlandı. Mayıs faturasında ek %8 düşüş bekleniyor.", companyId },
+      );
+    }
+    if (rVeriMerkezi) {
+      demoNotes.push(
+        { riskId: rVeriMerkezi.id, userId: adminId, userName: "Ayşe Kaya", content: "Yedek klima ünitesi kuruldu ve test edildi. Sıcaklık alarmı 28°C eşiğine ayarlandı.", companyId },
+        { riskId: rVeriMerkezi.id, userId: adminId, userName: adminName, content: "İzleme aşamasına geçildi. Son 30 günde alarm tetiklenmedi. Bir sonraki bakım Temmuz'da.", companyId },
+      );
+    }
+    if (rFreon) {
+      demoNotes.push(
+        { riskId: rFreon.id, userId: adminId, userName: "Fatih Demir", content: "Nisan periyodik bakımında A Blok kompresör 2'de küçük kaçak tespit edildi. Sızdırmazlık elemanı değiştirildi.", companyId },
+        { riskId: rFreon.id, userId: adminId, userName: "Fatih Demir", content: "Mayıs bakımı tamamlandı. Tüm hatlar kontrol edildi, kaçak yok. Periyodik test takvimi aylık bazda güncellendi.", companyId },
+      );
+    }
+    if (rTermal) {
+      demoNotes.push(
+        { riskId: rTermal.id, userId: adminId, userName: "Fatih Demir", content: "Fizibilite raporunun 1. taslağı tamamlandı. Beklenen geri ödeme süresi 4,5 yıl olarak hesaplandı.", companyId },
+      );
+    }
+
+    if (demoNotes.length > 0) {
+      await db.insert(riskNotesTable).values(demoNotes);
+    }
 
     // ── SEU / ÖEK ───────────────────────────────────────────────────────────
     await db.insert(seuTable).values([

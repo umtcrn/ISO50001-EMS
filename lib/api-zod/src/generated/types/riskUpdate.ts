@@ -19,7 +19,6 @@ export interface RiskUpdate {
   targetProbability?: number;
   targetSeverity?: number;
   targetScore?: number;
-  occurrenceNote?: string;
   owner?: string;
   status?: string;
 }

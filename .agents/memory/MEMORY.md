@@ -1,2 +1,4 @@
 - [EMS Dashboard Architecture](ems-dashboard.md) — ISO 50001 EMS full-stack app: React+Vite frontend at `/`, Express API on port 8080, Postgres + Drizzle ORM.
 - [EMS Multi-unit hook pattern](ems-multi-unit.md) — unitId context, hook çağrı kalıbı, TS7030 return-toast fix
+- [EMS Orval Zod export conflict](ems-orval-zod-conflict.md) — When Orval generates request body types, both api.ts (Zod) and types/ dir export same names; fix: only export from api.ts in api-zod/src/index.ts
+- [EMS Risk Notes feature](ems-risk-notes.md) — riskNotesTable added with cascade FK; notes returned embedded in GET /risks; admin-only PATCH/DELETE note endpoints

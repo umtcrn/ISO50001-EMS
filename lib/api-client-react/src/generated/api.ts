@@ -20,6 +20,7 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  AddRiskNoteBody,
   AiSuggestionRequest,
   AiSuggestionResponse,
   Company,
@@ -59,6 +60,7 @@ import type {
   ReportResult,
   RiskInput,
   RiskItem,
+  RiskNote,
   RiskUpdate,
   SeuBreakdownPoint,
   SeuInput,
@@ -71,6 +73,7 @@ import type {
   Unit,
   UnitInput,
   UnitUpdate,
+  UpdateRiskNoteBody,
   WeatherFetchRequest,
   WeatherRecord
 } from './api.schemas';
@@ -2421,6 +2424,224 @@ export const useDeleteRisk = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getDeleteRiskMutationOptions(options));
+    }
+
+export const getAddRiskNoteUrl = (id: number,) => {
+
+
+
+
+  return `/api/risks/${id}/notes`
+}
+
+/**
+ * @summary Gerçekleşme notu ekle
+ */
+export const addRiskNote = async (id: number,
+    addRiskNoteBody: AddRiskNoteBody, options?: RequestInit): Promise<RiskNote> => {
+
+  return customFetch<RiskNote>(getAddRiskNoteUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      addRiskNoteBody,)
+  }
+);}
+
+
+
+
+export const getAddRiskNoteMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof addRiskNote>>, TError,{id: number;data: BodyType<AddRiskNoteBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof addRiskNote>>, TError,{id: number;data: BodyType<AddRiskNoteBody>}, TContext> => {
+
+const mutationKey = ['addRiskNote'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof addRiskNote>>, {id: number;data: BodyType<AddRiskNoteBody>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  addRiskNote(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AddRiskNoteMutationResult = NonNullable<Awaited<ReturnType<typeof addRiskNote>>>
+    export type AddRiskNoteMutationBody = BodyType<AddRiskNoteBody>
+    export type AddRiskNoteMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Gerçekleşme notu ekle
+ */
+export const useAddRiskNote = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof addRiskNote>>, TError,{id: number;data: BodyType<AddRiskNoteBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof addRiskNote>>,
+        TError,
+        {id: number;data: BodyType<AddRiskNoteBody>},
+        TContext
+      > => {
+      return useMutation(getAddRiskNoteMutationOptions(options));
+    }
+
+export const getUpdateRiskNoteUrl = (id: number,
+    noteId: number,) => {
+
+
+
+
+  return `/api/risks/${id}/notes/${noteId}`
+}
+
+/**
+ * @summary Gerçekleşme notunu düzenle (yönetici)
+ */
+export const updateRiskNote = async (id: number,
+    noteId: number,
+    updateRiskNoteBody: UpdateRiskNoteBody, options?: RequestInit): Promise<RiskNote> => {
+
+  return customFetch<RiskNote>(getUpdateRiskNoteUrl(id,noteId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      updateRiskNoteBody,)
+  }
+);}
+
+
+
+
+export const getUpdateRiskNoteMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateRiskNote>>, TError,{id: number;noteId: number;data: BodyType<UpdateRiskNoteBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateRiskNote>>, TError,{id: number;noteId: number;data: BodyType<UpdateRiskNoteBody>}, TContext> => {
+
+const mutationKey = ['updateRiskNote'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateRiskNote>>, {id: number;noteId: number;data: BodyType<UpdateRiskNoteBody>}> = (props) => {
+          const {id,noteId,data} = props ?? {};
+
+          return  updateRiskNote(id,noteId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateRiskNoteMutationResult = NonNullable<Awaited<ReturnType<typeof updateRiskNote>>>
+    export type UpdateRiskNoteMutationBody = BodyType<UpdateRiskNoteBody>
+    export type UpdateRiskNoteMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Gerçekleşme notunu düzenle (yönetici)
+ */
+export const useUpdateRiskNote = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateRiskNote>>, TError,{id: number;noteId: number;data: BodyType<UpdateRiskNoteBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateRiskNote>>,
+        TError,
+        {id: number;noteId: number;data: BodyType<UpdateRiskNoteBody>},
+        TContext
+      > => {
+      return useMutation(getUpdateRiskNoteMutationOptions(options));
+    }
+
+export const getDeleteRiskNoteUrl = (id: number,
+    noteId: number,) => {
+
+
+
+
+  return `/api/risks/${id}/notes/${noteId}`
+}
+
+/**
+ * @summary Gerçekleşme notunu sil (yönetici)
+ */
+export const deleteRiskNote = async (id: number,
+    noteId: number, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDeleteRiskNoteUrl(id,noteId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteRiskNoteMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteRiskNote>>, TError,{id: number;noteId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteRiskNote>>, TError,{id: number;noteId: number}, TContext> => {
+
+const mutationKey = ['deleteRiskNote'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteRiskNote>>, {id: number;noteId: number}> = (props) => {
+          const {id,noteId} = props ?? {};
+
+          return  deleteRiskNote(id,noteId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteRiskNoteMutationResult = NonNullable<Awaited<ReturnType<typeof deleteRiskNote>>>
+
+    export type DeleteRiskNoteMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Gerçekleşme notunu sil (yönetici)
+ */
+export const useDeleteRiskNote = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteRiskNote>>, TError,{id: number;noteId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteRiskNote>>,
+        TError,
+        {id: number;noteId: number},
+        TContext
+      > => {
+      return useMutation(getDeleteRiskNoteMutationOptions(options));
     }
 
 export const getListSeuUrl = (params?: ListSeuParams,) => {

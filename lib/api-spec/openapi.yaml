@@ -668,6 +668,87 @@ paths:
         "204":
           description: Deleted
 
+  /risks/{id}/notes:
+    post:
+      operationId: addRiskNote
+      tags: [risks]
+      summary: Gerçekleşme notu ekle
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [content]
+              properties:
+                content:
+                  type: string
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RiskNote"
+
+  /risks/{id}/notes/{noteId}:
+    patch:
+      operationId: updateRiskNote
+      tags: [risks]
+      summary: Gerçekleşme notunu düzenle (yönetici)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: noteId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [content]
+              properties:
+                content:
+                  type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RiskNote"
+    delete:
+      operationId: deleteRiskNote
+      tags: [risks]
+      summary: Gerçekleşme notunu sil (yönetici)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: noteId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
   # ── SEU / ÖEK ────────────────────────────────────────────
   /seu:
     get:
@@ -1331,6 +1412,24 @@ components:
         impact:
           type: string
 
+    # ── Risk Note ─────────────────────────────────────────────
+    RiskNote:
+      type: object
+      required: [id, riskId, userName, content, createdAt]
+      properties:
+        id:
+          type: integer
+        riskId:
+          type: integer
+        userId:
+          type: ["integer", "null"]
+        userName:
+          type: string
+        content:
+          type: string
+        createdAt:
+          type: string
+
     # ── Risk ─────────────────────────────────────────────────
     RiskItem:
       type: object
@@ -1373,9 +1472,10 @@ components:
         targetScore:
           type: ["integer", "null"]
           description: "Hedeflenen risk skoru"
-        occurrenceNote:
-          type: ["string", "null"]
-          description: "Gerçekleşme durumu açıklaması"
+        notes:
+          type: array
+          items:
+            $ref: "#/components/schemas/RiskNote"
         owner:
           type: ["string", "null"]
         status:
@@ -1412,8 +1512,6 @@ components:
           type: integer
         targetScore:
           type: integer
-        occurrenceNote:
-          type: string
         owner:
           type: string
         status:
@@ -1446,8 +1544,6 @@ components:
           type: integer
         targetScore:
           type: integer
-        occurrenceNote:
-          type: string
         owner:
           type: string
         status:

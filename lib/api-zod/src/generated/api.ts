@@ -538,7 +538,14 @@ export const ListRisksResponseItem = zod.object({
   "targetProbability": zod.number().nullish().describe('Hedeflenen olasılık (1-5, sadece risk+aksiyon)'),
   "targetSeverity": zod.number().nullish().describe('Hedeflenen etki (1-5, sadece risk+aksiyon)'),
   "targetScore": zod.number().nullish().describe('Hedeflenen risk skoru'),
-  "occurrenceNote": zod.string().nullish().describe('Gerçekleşme durumu açıklaması'),
+  "notes": zod.array(zod.object({
+  "id": zod.number(),
+  "riskId": zod.number(),
+  "userId": zod.number().nullish(),
+  "userName": zod.string(),
+  "content": zod.string(),
+  "createdAt": zod.string()
+})).optional(),
   "owner": zod.string().nullish(),
   "status": zod.string().optional().describe('acik | devam | kapali'),
   "createdAt": zod.string().optional()
@@ -562,7 +569,6 @@ export const CreateRiskBody = zod.object({
   "targetProbability": zod.number().optional(),
   "targetSeverity": zod.number().optional(),
   "targetScore": zod.number().optional(),
-  "occurrenceNote": zod.string().optional(),
   "owner": zod.string().optional(),
   "status": zod.string().optional()
 })
@@ -588,7 +594,6 @@ export const UpdateRiskBody = zod.object({
   "targetProbability": zod.number().optional(),
   "targetSeverity": zod.number().optional(),
   "targetScore": zod.number().optional(),
-  "occurrenceNote": zod.string().optional(),
   "owner": zod.string().optional(),
   "status": zod.string().optional()
 })
@@ -608,7 +613,14 @@ export const UpdateRiskResponse = zod.object({
   "targetProbability": zod.number().nullish().describe('Hedeflenen olasılık (1-5, sadece risk+aksiyon)'),
   "targetSeverity": zod.number().nullish().describe('Hedeflenen etki (1-5, sadece risk+aksiyon)'),
   "targetScore": zod.number().nullish().describe('Hedeflenen risk skoru'),
-  "occurrenceNote": zod.string().nullish().describe('Gerçekleşme durumu açıklaması'),
+  "notes": zod.array(zod.object({
+  "id": zod.number(),
+  "riskId": zod.number(),
+  "userId": zod.number().nullish(),
+  "userName": zod.string(),
+  "content": zod.string(),
+  "createdAt": zod.string()
+})).optional(),
   "owner": zod.string().nullish(),
   "status": zod.string().optional().describe('acik | devam | kapali'),
   "createdAt": zod.string().optional()
@@ -620,6 +632,49 @@ export const UpdateRiskResponse = zod.object({
  */
 export const DeleteRiskParams = zod.object({
   "id": zod.coerce.number()
+})
+
+
+/**
+ * @summary Gerçekleşme notu ekle
+ */
+export const AddRiskNoteParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const AddRiskNoteBody = zod.object({
+  "content": zod.string()
+})
+
+
+/**
+ * @summary Gerçekleşme notunu düzenle (yönetici)
+ */
+export const UpdateRiskNoteParams = zod.object({
+  "id": zod.coerce.number(),
+  "noteId": zod.coerce.number()
+})
+
+export const UpdateRiskNoteBody = zod.object({
+  "content": zod.string()
+})
+
+export const UpdateRiskNoteResponse = zod.object({
+  "id": zod.number(),
+  "riskId": zod.number(),
+  "userId": zod.number().nullish(),
+  "userName": zod.string(),
+  "content": zod.string(),
+  "createdAt": zod.string()
+})
+
+
+/**
+ * @summary Gerçekleşme notunu sil (yönetici)
+ */
+export const DeleteRiskNoteParams = zod.object({
+  "id": zod.coerce.number(),
+  "noteId": zod.coerce.number()
 })
 
 

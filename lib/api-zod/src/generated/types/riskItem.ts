@@ -5,6 +5,7 @@
  * Enerji Yönetim Sistemi API
  * OpenAPI spec version: 0.1.0
  */
+import type { RiskNote } from './riskNote';
 
 export interface RiskItem {
   id: number;
@@ -45,11 +46,7 @@ export interface RiskItem {
      * @nullable
      */
   targetScore?: number | null;
-  /**
-     * Gerçekleşme durumu açıklaması
-     * @nullable
-     */
-  occurrenceNote?: string | null;
+  notes?: RiskNote[];
   /** @nullable */
   owner?: string | null;
   /** acik | devam | kapali */

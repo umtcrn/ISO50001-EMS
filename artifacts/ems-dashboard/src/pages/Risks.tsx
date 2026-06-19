@@ -1,9 +1,17 @@
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useUnit } from "@/context/UnitContext";
 import { useCompany } from "@/context/CompanyContext";
 import { useAuth } from "@/context/AuthContext";
-import { useListRisks, useCreateRisk, useUpdateRisk, useDeleteRisk, getListRisksQueryKey, useListUnits, getListUnitsQueryKey } from "@workspace/api-client-react";
+import {
+  useListRisks,
+  useCreateRisk,
+  useUpdateRisk,
+  useDeleteRisk,
+  getListRisksQueryKey,
+  useListUnits,
+  getListUnitsQueryKey,
+} from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,9 +23,20 @@ import { Slider } from "@/components/ui/slider";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Plus, Pencil, Trash2, Building2, Target, ClipboardList, Eye } from "lucide-react";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Separator } from "@/components/ui/separator";
+import { Plus, Pencil, Trash2, Building2, Target, ClipboardList, MessageSquarePlus, Send } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { type MatrixConfig, type MatrixGrade, riskMatrixConfig, opportunityMatrixConfig } from "@/config/matrixConfig";
+
+interface RiskNote {
+  id: number;
+  riskId: number;
+  userId: number | null;
+  userName: string;
+  content: string;
+  createdAt: string;
+}
 
 interface RiskForm {
   type: string;
@@ -32,7 +51,6 @@ interface RiskForm {
   targetSeverity: number;
   owner: string;
   status: string;
-  occurrenceNote: string;
 }
 
 const EMPTY: RiskForm = {
@@ -43,7 +61,6 @@ const EMPTY: RiskForm = {
   mitigationPlan: "",
   targetProbability: 2, targetSeverity: 2,
   owner: "", status: "acik",
-  occurrenceNote: "",
 };
 
 function resolveGrade(score: number, grades: MatrixGrade[]): MatrixGrade {
@@ -81,53 +98,31 @@ function MatrixGrid({ items, config }: { items: any[]; config: MatrixConfig }) {
                 </div>
               ))}
             </div>
-
-            <div className="flex gap-0">
-              <div className="flex items-center justify-center shrink-0" style={{ width: 14 }}>
-                <span
-                  className="text-[9px] font-semibold text-muted-foreground tracking-widest whitespace-nowrap"
-                  style={{ transform: "rotate(-90deg)", transformOrigin: "center" }}
-                >
-                  OLASILIK
-                </span>
-              </div>
-
-              <div className="flex-1">
-                {[...levelValues].reverse().map(prob => (
-                  <div key={prob} className="flex items-stretch mb-1">
-                    <div className="w-[38px] shrink-0 flex flex-col items-end justify-center pr-1.5">
-                      <div className="text-[9px] text-muted-foreground leading-tight text-right">{levelMap[prob]}</div>
-                      <div className="text-[11px] font-bold text-muted-foreground">{prob}</div>
+            {[...levelValues].reverse().map(prob => (
+              <div key={prob} className="flex items-center mb-0.5">
+                <div className="w-[52px] shrink-0 text-right pr-2">
+                  <div className="text-[11px] font-bold text-muted-foreground">{prob}</div>
+                  <div className="text-[9px] text-muted-foreground leading-tight">{levelMap[prob]}</div>
+                </div>
+                {levelValues.map(impact => {
+                  const s = prob * impact;
+                  const grade = resolveGrade(s, config.grades);
+                  const count = cellMap[`${prob}-${impact}`] ?? 0;
+                  return (
+                    <div key={impact} className={`flex-1 min-w-[44px] min-h-[36px] rounded mx-0.5 flex items-center justify-center text-xs font-bold ${grade.cellStyle} ${count > 0 ? "ring-2 ring-white/40" : ""}`}>
+                      {count > 0 ? count : ""}
                     </div>
-                    {levelValues.map(impact => {
-                      const score = prob * impact;
-                      const count = cellMap[`${prob}-${impact}`] ?? 0;
-                      const grade = resolveGrade(score, config.grades);
-                      return (
-                        <div
-                          key={impact}
-                          className={`flex-1 min-w-[44px] mx-0.5 h-11 rounded border flex flex-col items-center justify-center relative ${grade.cellStyle}`}
-                        >
-                          <span className="absolute top-[3px] left-[4px] text-[8px] opacity-40 leading-none">{score}</span>
-                          {count > 0 && (
-                            <span className="text-xs font-bold">{count}</span>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                ))}
+                  );
+                })}
               </div>
-            </div>
+            ))}
           </div>
         </div>
-
-        <div className="flex flex-wrap gap-x-3 gap-y-1.5 pt-1 border-t border-border/40">
-          {config.grades.map(({ label, cellStyle }) => (
-            <div key={label} className="flex items-center gap-1.5">
-              <div className={`w-3 h-3 rounded-sm border ${cellStyle}`} />
-              <span className="text-[10px] text-muted-foreground">{label}</span>
-            </div>
+        <div className="flex flex-wrap gap-2 mt-1">
+          {config.grades.map(g => (
+            <span key={g.label} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium ${g.badgeStyle}`}>
+              {g.label} ({g.min}–{g.max})
+            </span>
           ))}
         </div>
       </CardContent>
@@ -135,301 +130,452 @@ function MatrixGrid({ items, config }: { items: any[]; config: MatrixConfig }) {
   );
 }
 
-function RiskOpportunityMatrices({ risks }: { risks: any[] }) {
-  const [active, setActive] = useState(0);
-  const scrollRef = useRef<HTMLDivElement>(null);
-
-  const riskItems   = risks.filter(r => r.type === "risk");
-  const firsatItems = risks.filter(r => r.type === "firsat");
-
-  const matrices = [
-    { items: riskItems,   config: riskMatrixConfig },
-    { items: firsatItems, config: opportunityMatrixConfig },
-  ];
-
-  function goTo(idx: number) {
-    setActive(idx);
-    if (scrollRef.current) {
-      scrollRef.current.scrollTo({ left: idx * scrollRef.current.offsetWidth, behavior: "smooth" });
-    }
+function formatDate(dateStr: string): string {
+  try {
+    return new Intl.DateTimeFormat("tr-TR", {
+      day: "2-digit", month: "long", year: "numeric",
+      hour: "2-digit", minute: "2-digit",
+    }).format(new Date(dateStr));
+  } catch {
+    return dateStr;
   }
-
-  function handleScroll() {
-    if (scrollRef.current) {
-      const idx = Math.round(scrollRef.current.scrollLeft / scrollRef.current.offsetWidth);
-      setActive(idx);
-    }
-  }
-
-  return (
-    <div className="space-y-3">
-      <div
-        ref={scrollRef}
-        onScroll={handleScroll}
-        className="flex overflow-x-auto snap-x snap-mandatory scrollbar-none"
-        style={{ scrollbarWidth: "none" }}
-      >
-        {matrices.map(({ items, config }) => (
-          <div key={config.title} className="snap-start shrink-0 w-full">
-            <MatrixGrid items={items} config={config} />
-          </div>
-        ))}
-      </div>
-
-      <div className="flex justify-center items-center gap-2">
-        {matrices.map(({ config }, i) => (
-          <button
-            key={config.title}
-            onClick={() => goTo(i)}
-            aria-label={config.title}
-            className={`rounded-full transition-all duration-200 ${
-              active === i
-                ? "w-6 h-2.5 bg-teal-400"
-                : "w-2.5 h-2.5 bg-muted-foreground/30 hover:bg-muted-foreground/50"
-            }`}
-          />
-        ))}
-      </div>
-    </div>
-  );
 }
 
-function ScoreBadge({ score, type }: { score: number; type: string }) {
-  const config = type === "firsat" ? opportunityMatrixConfig : riskMatrixConfig;
-  const grade = resolveGrade(score, config.grades);
-  return (
-    <Badge variant="outline" className={`text-xs ${grade.badgeStyle}`}>
-      {grade.shortLabel} ({score})
-    </Badge>
-  );
-}
-
-function ScoreDisplay({ prob, sev, type, label }: { prob: number; sev: number; type: string; label?: string }) {
-  const score = prob * sev;
-  const cfg = type === "firsat" ? opportunityMatrixConfig : riskMatrixConfig;
-  const grade = resolveGrade(score, cfg.grades);
-  return (
-    <div className={`rounded-md p-3 flex flex-col items-center justify-center border ${grade.badgeStyle}`}>
-      <p className="text-[10px] opacity-70 mb-0.5">{label ?? "Skor"}</p>
-      <p className="text-2xl font-bold leading-none">{score}</p>
-      <p className="text-[10px] mt-1 font-medium">{grade.shortLabel}</p>
-    </div>
-  );
-}
+const API_BASE = import.meta.env.VITE_API_URL ?? "http://localhost:8080";
 
 export default function Risks() {
-  const queryClient = useQueryClient();
-  const { toast } = useToast();
-  const { unitId } = useUnit();
+  const { unitId: activeUnitId } = useUnit();
   const { companyId } = useCompany();
-  const { user } = useAuth();
-  const isAdmin = user?.role === "admin" || user?.role === "superadmin";
-  const unitParam = unitId !== null ? { unitId } : companyId !== null ? { companyId } : undefined;
+  const { token, user } = useAuth();
+  const role = user?.role;
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const isAdmin = role === "admin" || role === "superadmin";
 
-  const [open, setOpen] = useState(false);
-  const [editingId, setEditingId] = useState<number | null>(null);
+  const unitParam = activeUnitId !== null ? activeUnitId : undefined;
+  const { data: risks = [], isLoading } = useListRisks(
+    { unitId: unitParam as any },
+    { query: { queryKey: getListRisksQueryKey({ unitId: unitParam as any }) } }
+  );
+  const { data: units = [] } = useListUnits(
+    {},
+    { query: { queryKey: getListUnitsQueryKey({}) } }
+  );
+
+  const createMut = useCreateRisk();
+  const updateMut = useUpdateRisk();
+  const deleteMut = useDeleteRisk();
+
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editId, setEditId] = useState<number | null>(null);
   const [form, setForm] = useState<RiskForm>(EMPTY);
-  const [filterType, setFilterType] = useState("all");
+  const [filterType, setFilterType] = useState<"all" | "risk" | "firsat">("all");
+  const [filterStatus, setFilterStatus] = useState<"all" | "acik" | "devam" | "kapali">("all");
 
-  const { data: risks, isLoading } = useListRisks(unitParam, { query: { queryKey: getListRisksQueryKey(unitParam) } });
-  const { data: allUnits } = useListUnits({}, { query: { queryKey: getListUnitsQueryKey({}), enabled: isAdmin && unitId === null } });
-  const unitMap: Record<number, string> = Object.fromEntries((allUnits ?? []).map((u: any) => [u.id, u.name]));
-  const createRisk = useCreateRisk();
-  const updateRisk = useUpdateRisk();
-  const deleteRisk = useDeleteRisk();
+  // Notes state
+  const [newNote, setNewNote] = useState("");
+  const [submittingNote, setSubmittingNote] = useState(false);
+  const [editingNoteId, setEditingNoteId] = useState<number | null>(null);
+  const [editingNoteContent, setEditingNoteContent] = useState("");
+  const [savingNoteId, setSavingNoteId] = useState<number | null>(null);
 
-  const filtered = (risks ?? []).filter((r: any) => filterType === "all" || r.type === filterType);
+  const editingRisk = editId !== null ? (risks as any[]).find((r: any) => r.id === editId) : null;
+  const editingNotes: RiskNote[] = editingRisk?.notes ?? [];
 
-  function openCreate() { setEditingId(null); setForm(EMPTY); setOpen(true); }
-  function openEdit(r: any) {
-    setEditingId(r.id);
-    setForm({
-      type: r.type,
-      title: r.title,
-      description: r.description ?? "",
-      foreseenImpact: r.foreseenImpact ?? "",
-      probability: r.probability,
-      severity: r.severity,
-      responseType: r.responseType ?? "izleme",
-      mitigationPlan: r.mitigationPlan ?? "",
-      targetProbability: r.targetProbability ?? 2,
-      targetSeverity: r.targetSeverity ?? 2,
-      owner: r.owner ?? "",
-      status: r.status,
-      occurrenceNote: r.occurrenceNote ?? "",
-    });
-    setOpen(true);
+  const patchField = (key: keyof RiskForm, value: any) => setForm(f => ({ ...f, [key]: value }));
+
+  const riskFiltered = (risks as any[]).filter((r: any) => r.type === "risk"
+    && (filterType === "all" || filterType === "risk")
+    && (filterStatus === "all" || r.status === filterStatus)
+  );
+  const firsatFiltered = (risks as any[]).filter((r: any) => r.type === "firsat"
+    && (filterType === "all" || filterType === "firsat")
+    && (filterStatus === "all" || r.status === filterStatus)
+  );
+  const displayItems = [...riskFiltered, ...firsatFiltered];
+
+  function openCreate(defaultType: string = "risk") {
+    setEditId(null);
+    setForm({ ...EMPTY, type: defaultType });
+    setNewNote("");
+    setEditingNoteId(null);
+    setDialogOpen(true);
   }
 
-  function handleSave() {
-    if (!form.title) { toast({ title: "Başlık gerekli", variant: "destructive" }); return; }
+  function openEdit(item: any) {
+    setEditId(item.id);
+    setForm({
+      type: item.type,
+      title: item.title ?? "",
+      description: item.description ?? "",
+      foreseenImpact: item.foreseenImpact ?? "",
+      probability: item.probability ?? 3,
+      severity: item.severity ?? 3,
+      responseType: item.responseType ?? "izleme",
+      mitigationPlan: item.mitigationPlan ?? "",
+      targetProbability: item.targetProbability ?? 2,
+      targetSeverity: item.targetSeverity ?? 2,
+      owner: item.owner ?? "",
+      status: item.status ?? "acik",
+    });
+    setNewNote("");
+    setEditingNoteId(null);
+    setDialogOpen(true);
+  }
+
+  function invalidateRisks() {
+    qc.invalidateQueries({ queryKey: getListRisksQueryKey({ unitId: unitParam as any }) });
+  }
+
+  async function handleSave() {
+    if (!form.title.trim()) { toast({ title: "Başlık zorunludur", variant: "destructive" }); return; }
     if (form.responseType === "aksiyon" && !form.mitigationPlan.trim()) {
       toast({ title: "Aksiyon seçildiğinde eylem planı zorunludur", variant: "destructive" }); return;
     }
 
-    const isRisk = form.type === "risk";
-    const hasAction = form.responseType === "aksiyon";
-
-    const data: any = {
+    const payload: any = {
       type: form.type,
-      title: form.title,
-      description: form.description || undefined,
-      foreseenImpact: form.foreseenImpact || undefined,
+      title: form.title.trim(),
+      description: form.description.trim() || undefined,
+      foreseenImpact: form.foreseenImpact.trim() || undefined,
       probability: form.probability,
       severity: form.severity,
       responseType: form.responseType,
-      mitigationPlan: form.mitigationPlan || undefined,
-      owner: form.owner || undefined,
+      mitigationPlan: form.mitigationPlan.trim() || undefined,
+      owner: form.owner.trim() || undefined,
       status: form.status,
-      occurrenceNote: form.occurrenceNote || undefined,
     };
 
-    if (isRisk && hasAction) {
-      data.targetProbability = form.targetProbability;
-      data.targetSeverity = form.targetSeverity;
-      data.targetScore = form.targetProbability * form.targetSeverity;
-    } else {
-      data.targetProbability = null;
-      data.targetSeverity = null;
-      data.targetScore = null;
+    if (form.type === "risk" && form.responseType === "aksiyon") {
+      payload.targetProbability = form.targetProbability;
+      payload.targetSeverity = form.targetSeverity;
     }
 
-    if (unitId !== null) data.unitId = unitId;
-    if (editingId !== null) {
-      updateRisk.mutate({ id: editingId, data }, { onSuccess: () => { queryClient.invalidateQueries({ queryKey: getListRisksQueryKey(unitParam) }); setOpen(false); toast({ title: "Güncellendi" }); } });
-    } else {
-      createRisk.mutate({ data }, { onSuccess: () => { queryClient.invalidateQueries({ queryKey: getListRisksQueryKey(unitParam) }); setOpen(false); toast({ title: "Eklendi" }); } });
+    if (!activeUnitId && units.length > 0) payload.unitId = (units as any[])[0].id;
+    if (activeUnitId) payload.unitId = activeUnitId;
+
+    try {
+      if (editId !== null) {
+        await updateMut.mutateAsync({ id: editId, data: payload });
+        toast({ title: "Kayıt güncellendi" });
+      } else {
+        await createMut.mutateAsync({ data: payload });
+        toast({ title: "Kayıt oluşturuldu" });
+      }
+      setDialogOpen(false);
+      invalidateRisks();
+    } catch (err: any) {
+      toast({ title: "Hata", description: err?.message ?? "İşlem başarısız", variant: "destructive" });
     }
   }
 
-  function handleDelete(id: number) {
-    deleteRisk.mutate({ id }, { onSuccess: () => { queryClient.invalidateQueries({ queryKey: getListRisksQueryKey(unitParam) }); toast({ title: "Silindi" }); } });
+  async function handleDelete(id: number) {
+    if (!confirm("Bu kaydı silmek istiyor musunuz?")) return;
+    try {
+      await deleteMut.mutateAsync({ id });
+      toast({ title: "Kayıt silindi" });
+      invalidateRisks();
+    } catch {
+      toast({ title: "Silinemedi", variant: "destructive" });
+    }
   }
 
-  const isEditing = editingId !== null;
-  const isRiskType = form.type === "risk";
-  const isAksiyon = form.responseType === "aksiyon";
+  async function handleAddNote() {
+    if (!newNote.trim() || editId === null) return;
+    setSubmittingNote(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/risks/${editId}/notes`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ content: newNote.trim() }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      setNewNote("");
+      invalidateRisks();
+      toast({ title: "Not eklendi" });
+    } catch (err: any) {
+      toast({ title: "Not eklenemedi", description: err?.message, variant: "destructive" });
+    } finally {
+      setSubmittingNote(false);
+    }
+  }
+
+  async function handleSaveNote(noteId: number) {
+    if (!editingNoteContent.trim() || editId === null) return;
+    setSavingNoteId(noteId);
+    try {
+      const res = await fetch(`${API_BASE}/api/risks/${editId}/notes/${noteId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ content: editingNoteContent.trim() }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      setEditingNoteId(null);
+      invalidateRisks();
+      toast({ title: "Not güncellendi" });
+    } catch (err: any) {
+      toast({ title: "Güncellenemedi", description: err?.message, variant: "destructive" });
+    } finally {
+      setSavingNoteId(null);
+    }
+  }
+
+  async function handleDeleteNote(noteId: number) {
+    if (!confirm("Bu notu silmek istiyor musunuz?") || editId === null) return;
+    try {
+      const res = await fetch(`${API_BASE}/api/risks/${editId}/notes/${noteId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error(await res.text());
+      invalidateRisks();
+      toast({ title: "Not silindi" });
+    } catch (err: any) {
+      toast({ title: "Silinemedi", description: err?.message, variant: "destructive" });
+    }
+  }
+
+  function startEditNote(note: RiskNote) {
+    setEditingNoteId(note.id);
+    setEditingNoteContent(note.content);
+  }
+
+  function getRiskConfig(type: string) {
+    return type === "firsat" ? opportunityMatrixConfig : riskMatrixConfig;
+  }
+
+  function ScoreBadge({ item }: { item: any }) {
+    const cfg = getRiskConfig(item.type);
+    const grade = resolveGrade(item.score, cfg.grades);
+    return <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-bold ${grade.badgeStyle}`}>{grade.label} ({item.score})</span>;
+  }
+
+  const riskItems = (risks as any[]).filter(r => r.type === "risk");
+  const firsatItems = (risks as any[]).filter(r => r.type === "firsat");
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-6 p-4 max-w-7xl mx-auto">
+      {/* Header */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
-          <h1 className="text-2xl font-bold">Risk & Fırsat Analizi</h1>
-          <p className="text-sm text-muted-foreground mt-1">ISO 50001 — 1–5 puan sistemi ile değerlendirme</p>
+          <h1 className="text-2xl font-bold">Risk &amp; Fırsat Kaydı</h1>
+          <p className="text-muted-foreground text-sm mt-0.5">ISO 50001 uyumlu risk değerlendirme ve fırsat takibi</p>
         </div>
-        <Button onClick={openCreate} className="gap-2"><Plus className="h-4 w-4" /> Ekle</Button>
+        <div className="flex gap-2">
+          <Button size="sm" variant="outline" onClick={() => openCreate("firsat")}>
+            <Plus className="w-4 h-4 mr-1" /> Fırsat Ekle
+          </Button>
+          <Button size="sm" onClick={() => openCreate("risk")}>
+            <Plus className="w-4 h-4 mr-1" /> Risk Ekle
+          </Button>
+        </div>
       </div>
 
-      <RiskOpportunityMatrices risks={risks ?? []} />
+      {/* Matrix Overview */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <MatrixGrid items={riskItems} config={riskMatrixConfig} />
+        <MatrixGrid items={firsatItems} config={opportunityMatrixConfig} />
+      </div>
 
-      <div className="flex items-center gap-3">
-        <Select value={filterType} onValueChange={setFilterType}>
-          <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
+      {/* Filters */}
+      <div className="flex gap-3 flex-wrap items-center">
+        <Select value={filterType} onValueChange={v => setFilterType(v as any)}>
+          <SelectTrigger className="w-[160px] h-8 text-xs"><SelectValue placeholder="Tür" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Tümü</SelectItem>
-            <SelectItem value="risk">Riskler</SelectItem>
-            <SelectItem value="firsat">Fırsatlar</SelectItem>
+            <SelectItem value="risk">Risk</SelectItem>
+            <SelectItem value="firsat">Fırsat</SelectItem>
           </SelectContent>
         </Select>
-        <span className="text-sm text-muted-foreground">{filtered.length} öğe</span>
+        <Select value={filterStatus} onValueChange={v => setFilterStatus(v as any)}>
+          <SelectTrigger className="w-[160px] h-8 text-xs"><SelectValue placeholder="Durum" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Tüm Durumlar</SelectItem>
+            <SelectItem value="acik">Açık</SelectItem>
+            <SelectItem value="devam">Devam</SelectItem>
+            <SelectItem value="kapali">Kapalı</SelectItem>
+          </SelectContent>
+        </Select>
+        <span className="text-xs text-muted-foreground ml-auto">{displayItems.length} kayıt</span>
       </div>
 
-      {isLoading ? <div className="space-y-2">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-20" />)}</div> : (
+      {/* Items */}
+      {isLoading ? (
         <div className="space-y-3">
-          {filtered.length === 0 ? (
-            <Card><CardContent className="py-10 text-center text-muted-foreground"><p>Kayıt yok</p></CardContent></Card>
-          ) : filtered.map((r: any) => (
-            <Card key={r.id} className="group">
-              <CardContent className="p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <Badge variant="outline" className={r.type === "firsat" ? "border-blue-500/20 text-blue-400 bg-blue-500/10" : "border-red-500/20 text-red-400 bg-red-500/10"}>
-                        {r.type === "firsat" ? "Fırsat" : "Risk"}
-                      </Badge>
-                      <ScoreBadge score={r.score} type={r.type} />
-                      {r.responseType === "aksiyon" ? (
-                        <Badge variant="outline" className="border-violet-500/20 text-violet-400 bg-violet-500/10 gap-1 text-xs">
-                          <ClipboardList className="h-2.5 w-2.5" />Aksiyon
-                        </Badge>
-                      ) : (
-                        <Badge variant="outline" className="border-sky-500/20 text-sky-400 bg-sky-500/10 gap-1 text-xs">
-                          <Eye className="h-2.5 w-2.5" />İzleme
-                        </Badge>
-                      )}
-                      {r.targetScore != null && r.type === "risk" && (
-                        <Badge variant="outline" className="border-teal-500/20 text-teal-400 bg-teal-500/10 gap-1 text-xs">
-                          <Target className="h-2.5 w-2.5" />Hedef: {r.targetScore}
-                        </Badge>
-                      )}
-                      <Badge variant="outline" className={r.status === "kapali" ? "border-green-500/20 text-green-400 bg-green-500/10" : "border-muted"}>
-                        {r.status === "acik" ? "Açık" : r.status === "devam" ? "Devam Ediyor" : "Kapalı"}
-                      </Badge>
-                      {isAdmin && unitId === null && r.unitId && unitMap[r.unitId] && (
-                        <Badge variant="outline" className="text-xs border-violet-500/20 text-violet-400 bg-violet-500/10">
-                          <Building2 className="h-2.5 w-2.5 mr-1" />{unitMap[r.unitId]}
-                        </Badge>
-                      )}
-                    </div>
-                    <p className="font-semibold text-sm mt-2">{r.title}</p>
-                    {r.description && <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{r.description}</p>}
-                    {r.foreseenImpact && (
-                      <p className="text-xs text-amber-400/80 mt-1 line-clamp-1">
-                        <span className="font-medium text-amber-400/60">Öngörülebilir etki: </span>{r.foreseenImpact}
-                      </p>
-                    )}
-                    {r.occurrenceNote && (
-                      <p className="text-xs text-emerald-400/80 mt-1 line-clamp-1">
-                        <span className="font-medium text-emerald-400/60">Gerçekleşme: </span>{r.occurrenceNote}
-                      </p>
-                    )}
-                    <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
-                      <span>Olasılık: <strong>{r.probability}/5</strong></span>
-                      <span>Etki: <strong>{r.severity}/5</strong></span>
-                      {r.targetScore != null && r.type === "risk" && (
-                        <span className="text-teal-400">Hedef Skor: <strong>{r.targetScore}</strong> ({r.targetProbability}×{r.targetSeverity})</span>
-                      )}
-                      {r.owner && <span>Sorumlu: <strong>{r.owner}</strong></span>}
-                    </div>
-                    {r.mitigationPlan && (
-                      <p className="text-xs text-muted-foreground/70 mt-1 line-clamp-1">
-                        <span className="font-medium">Eylem: </span>{r.mitigationPlan}
-                      </p>
-                    )}
+          {[1,2,3].map(i => <Skeleton key={i} className="h-28 w-full rounded-xl" />)}
+        </div>
+      ) : displayItems.length === 0 ? (
+        <Card><CardContent className="py-12 text-center text-muted-foreground">Kayıt bulunamadı</CardContent></Card>
+      ) : (
+        <div className="space-y-3">
+          {displayItems.map((item: any) => {
+            const cfg = getRiskConfig(item.type);
+            const grade = resolveGrade(item.score, cfg.grades);
+            const isRisk = item.type === "risk";
+            const noteCount = (item.notes ?? []).length;
+            return (
+              <Card key={item.id} className="overflow-hidden">
+                <div className="flex">
+                  <div className="w-1.5 shrink-0">
+                    <div className={`h-full w-1.5 ${isRisk ? "bg-red-500" : "bg-emerald-500"}`} />
                   </div>
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                    <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => openEdit(r)}><Pencil className="h-3.5 w-3.5" /></Button>
-                    <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-destructive hover:text-destructive" onClick={() => handleDelete(r.id)}><Trash2 className="h-3.5 w-3.5" /></Button>
+                  <div className="flex-1 p-4">
+                    <div className="flex items-start justify-between gap-3 flex-wrap">
+                      <div className="space-y-1 flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <Badge variant={isRisk ? "destructive" : "default"} className={isRisk ? "" : "bg-emerald-600 hover:bg-emerald-700"}>
+                            {isRisk ? "Risk" : "Fırsat"}
+                          </Badge>
+                          <span className="font-semibold text-sm truncate">{item.title}</span>
+                          <ScoreBadge item={item} />
+                          {noteCount > 0 && (
+                            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                              <MessageSquarePlus className="w-3 h-3" />{noteCount} not
+                            </span>
+                          )}
+                        </div>
+                        {item.description && <p className="text-xs text-muted-foreground line-clamp-2">{item.description}</p>}
+                        {item.foreseenImpact && (
+                          <p className="text-xs text-amber-400/90 line-clamp-1">
+                            <Target className="w-3 h-3 inline mr-1" />{item.foreseenImpact}
+                          </p>
+                        )}
+                        <div className="flex items-center gap-3 mt-1 flex-wrap">
+                          <span className="text-xs text-muted-foreground">O:{item.probability} × E:{item.severity}</span>
+                          {item.targetScore && item.type === "risk" && (
+                            <span className="text-xs text-blue-400">Hedef: {item.targetScore}</span>
+                          )}
+                          <span className="text-xs">
+                            {item.responseType === "aksiyon" && <ClipboardList className="w-3 h-3 inline mr-1 text-blue-400" />}
+                            {item.responseType === "aksiyon" ? "Aksiyon" : item.responseType === "kabul" ? "Kabul" : "İzleme"}
+                          </span>
+                          {item.owner && <span className="text-xs text-muted-foreground"><Building2 className="w-3 h-3 inline mr-1" />{item.owner}</span>}
+                          <Badge variant="outline" className="text-[10px] h-5 px-1.5">
+                            {item.status === "acik" ? "Açık" : item.status === "devam" ? "Devam" : "Kapalı"}
+                          </Badge>
+                        </div>
+                      </div>
+                      <div className="flex gap-1 shrink-0">
+                        <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => openEdit(item)}>
+                          <Pencil className="w-4 h-4" />
+                        </Button>
+                        <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => handleDelete(item.id)}>
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </div>
                   </div>
                 </div>
-              </CardContent>
-            </Card>
-          ))}
+              </Card>
+            );
+          })}
         </div>
       )}
 
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+      {/* Create/Edit Dialog */}
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{isEditing ? "Düzenle" : "Risk / Fırsat Ekle"}</DialogTitle>
+            <DialogTitle>{editId !== null ? "Kaydı Düzenle" : form.type === "firsat" ? "Yeni Fırsat" : "Yeni Risk"}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
+            {/* Type selector */}
+            <div className="flex gap-2">
+              <Button size="sm" variant={form.type === "risk" ? "default" : "outline"} onClick={() => patchField("type", "risk")}>Risk</Button>
+              <Button size="sm" variant={form.type === "firsat" ? "default" : "outline"} onClick={() => patchField("type", "firsat")}>Fırsat</Button>
+            </div>
 
-            {/* Tür + Durum */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>Tür</Label>
-                <Select value={form.type} onValueChange={v => setForm(f => ({ ...f, type: v }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="risk">Risk</SelectItem>
-                    <SelectItem value="firsat">Fırsat</SelectItem>
-                  </SelectContent>
-                </Select>
+            {/* Title */}
+            <div className="space-y-1">
+              <Label>Başlık *</Label>
+              <Input value={form.title} onChange={e => patchField("title", e.target.value)} placeholder="Risk/Fırsat başlığı" />
+            </div>
+
+            {/* Description */}
+            <div className="space-y-1">
+              <Label>Açıklama</Label>
+              <Textarea value={form.description} onChange={e => patchField("description", e.target.value)} placeholder="Kısa açıklama" rows={2} />
+            </div>
+
+            {/* Foreseen Impact */}
+            <div className="space-y-1">
+              <Label>Öngörülen Etki</Label>
+              <Textarea value={form.foreseenImpact} onChange={e => patchField("foreseenImpact", e.target.value)} placeholder="Gerçekleşirse beklenen etki/sonuç" rows={2} />
+            </div>
+
+            {/* Probability & Severity */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Olasılık: <span className="font-bold text-primary">{form.probability}</span></Label>
+                <Slider min={1} max={5} step={1} value={[form.probability]} onValueChange={([v]) => patchField("probability", v)} />
+                <div className="flex justify-between text-[10px] text-muted-foreground"><span>Çok Düşük</span><span>Çok Yüksek</span></div>
               </div>
-              <div className="space-y-1.5">
+              <div className="space-y-2">
+                <Label>Etki: <span className="font-bold text-primary">{form.severity}</span></Label>
+                <Slider min={1} max={5} step={1} value={[form.severity]} onValueChange={([v]) => patchField("severity", v)} />
+                <div className="flex justify-between text-[10px] text-muted-foreground"><span>Çok Düşük</span><span>Çok Yüksek</span></div>
+              </div>
+            </div>
+            <div className="text-sm text-center">
+              Skor: <span className="font-bold text-primary text-lg">{form.probability * form.severity}</span>
+              {" — "}
+              <ScoreBadgeInline score={form.probability * form.severity} type={form.type} />
+            </div>
+
+            {/* Karar (Response Type) */}
+            <div className="space-y-2">
+              <Label>Karar</Label>
+              <RadioGroup value={form.responseType} onValueChange={v => patchField("responseType", v)} className="flex gap-4">
+                <div className="flex items-center gap-2">
+                  <RadioGroupItem value="izleme" id="r-izleme" />
+                  <Label htmlFor="r-izleme" className="font-normal cursor-pointer">İzleme</Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <RadioGroupItem value="aksiyon" id="r-aksiyon" />
+                  <Label htmlFor="r-aksiyon" className="font-normal cursor-pointer">Aksiyon</Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <RadioGroupItem value="kabul" id="r-kabul" />
+                  <Label htmlFor="r-kabul" className="font-normal cursor-pointer">Kabul</Label>
+                </div>
+              </RadioGroup>
+            </div>
+
+            {/* Mitigation Plan (shown when aksiyon) */}
+            {form.responseType === "aksiyon" && (
+              <div className="space-y-1">
+                <Label>Eylem Planı *</Label>
+                <Textarea value={form.mitigationPlan} onChange={e => patchField("mitigationPlan", e.target.value)} placeholder="Uygulanacak aksiyon adımları" rows={3} />
+              </div>
+            )}
+
+            {/* Target score (risk + aksiyon only) */}
+            {form.type === "risk" && form.responseType === "aksiyon" && (
+              <div className="grid grid-cols-2 gap-4 p-3 rounded-lg border border-blue-500/30 bg-blue-500/5">
+                <div className="col-span-2 text-xs font-semibold text-blue-400 uppercase tracking-wide">Hedef Değerler</div>
+                <div className="space-y-2">
+                  <Label className="text-xs">Hedef Olasılık: <span className="font-bold text-blue-400">{form.targetProbability}</span></Label>
+                  <Slider min={1} max={5} step={1} value={[form.targetProbability]} onValueChange={([v]) => patchField("targetProbability", v)} />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs">Hedef Etki: <span className="font-bold text-blue-400">{form.targetSeverity}</span></Label>
+                  <Slider min={1} max={5} step={1} value={[form.targetSeverity]} onValueChange={([v]) => patchField("targetSeverity", v)} />
+                </div>
+                <div className="col-span-2 text-xs text-center">
+                  Hedef Skor: <span className="font-bold text-blue-400 text-base">{form.targetProbability * form.targetSeverity}</span>
+                </div>
+              </div>
+            )}
+
+            {/* Owner & Status */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <Label>Sorumlu</Label>
+                <Input value={form.owner} onChange={e => patchField("owner", e.target.value)} placeholder="Sorumlu kişi/departman" />
+              </div>
+              <div className="space-y-1">
                 <Label>Durum</Label>
-                <Select value={form.status} onValueChange={v => setForm(f => ({ ...f, status: v }))}>
+                <Select value={form.status} onValueChange={v => patchField("status", v)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="acik">Açık</SelectItem>
@@ -440,162 +586,107 @@ export default function Risks() {
               </div>
             </div>
 
-            {/* Başlık */}
-            <div className="space-y-1.5">
-              <Label>Başlık *</Label>
-              <Input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} />
-            </div>
-
-            {/* Açıklama */}
-            <div className="space-y-1.5">
-              <Label>Açıklama</Label>
-              <Textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} rows={2} />
-            </div>
-
-            {/* Öngörülebilir Etki */}
-            <div className="space-y-1.5">
-              <Label>Öngörülebilir Etki</Label>
-              <Textarea
-                value={form.foreseenImpact}
-                onChange={e => setForm(f => ({ ...f, foreseenImpact: e.target.value }))}
-                placeholder="Bu risk/fırsatın öngörülebilir etkilerini açıklayın..."
-                rows={2}
-              />
-            </div>
-
-            {/* Olasılık */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label>Olasılık</Label>
-                <span className="text-sm font-semibold text-teal-400">{form.probability}/5</span>
-              </div>
-              <Slider min={1} max={5} step={1} value={[form.probability]} onValueChange={([v]) => setForm(f => ({ ...f, probability: v }))} />
-            </div>
-
-            {/* Etki */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label>Etki</Label>
-                <span className="text-sm font-semibold text-teal-400">{form.severity}/5</span>
-              </div>
-              <Slider min={1} max={5} step={1} value={[form.severity]} onValueChange={([v]) => setForm(f => ({ ...f, severity: v }))} />
-            </div>
-
-            {/* Sorumlu + Skor */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>Sorumlu</Label>
-                <Input value={form.owner} onChange={e => setForm(f => ({ ...f, owner: e.target.value }))} placeholder="İsim / Birim" />
-              </div>
-              <ScoreDisplay prob={form.probability} sev={form.severity} type={form.type} label="Mevcut Skor" />
-            </div>
-
-            {/* Yanıt Türü */}
-            <div className="space-y-2">
-              <Label>Yanıt Türü</Label>
-              <RadioGroup
-                value={form.responseType}
-                onValueChange={v => setForm(f => ({ ...f, responseType: v }))}
-                className="flex gap-6"
-              >
-                <div className="flex items-center gap-2">
-                  <RadioGroupItem value="aksiyon" id="resp-aksiyon" />
-                  <label htmlFor="resp-aksiyon" className="flex items-center gap-1.5 text-sm cursor-pointer">
-                    <ClipboardList className="h-3.5 w-3.5 text-violet-400" />
-                    Aksiyon
-                  </label>
-                </div>
-                <div className="flex items-center gap-2">
-                  <RadioGroupItem value="izleme" id="resp-izleme" />
-                  <label htmlFor="resp-izleme" className="flex items-center gap-1.5 text-sm cursor-pointer">
-                    <Eye className="h-3.5 w-3.5 text-sky-400" />
-                    İzleme
-                  </label>
-                </div>
-              </RadioGroup>
-            </div>
-
-            {/* Aksiyon alanları */}
-            {isAksiyon && (
+            {/* Notes Section (only in edit mode) */}
+            {editId !== null && (
               <>
-                {/* Eylem Planı (zorunlu) */}
-                <div className="space-y-1.5">
-                  <Label>Eylem Planı *</Label>
-                  <Textarea
-                    value={form.mitigationPlan}
-                    onChange={e => setForm(f => ({ ...f, mitigationPlan: e.target.value }))}
-                    placeholder="Uygulanacak eylem adımlarını açıklayın..."
-                    rows={3}
-                    className={!form.mitigationPlan.trim() ? "border-destructive/50 focus-visible:ring-destructive/30" : ""}
-                  />
-                  {!form.mitigationPlan.trim() && (
-                    <p className="text-[11px] text-destructive">Aksiyon seçildiğinde eylem planı zorunludur.</p>
-                  )}
-                </div>
-
-                {/* Hedeflenen Olasılık + Hedeflenen Etki + Hedeflenen Skor — sadece risk türü için */}
-                {isRiskType && (
-                  <div className="space-y-3 rounded-md border border-teal-500/20 bg-teal-500/5 p-3">
-                    <p className="text-xs font-semibold text-teal-400 flex items-center gap-1.5">
-                      <Target className="h-3.5 w-3.5" />
-                      Hedeflenen Risk Değerleri
-                    </p>
-
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <Label className="text-xs">Hedeflenen Olasılık</Label>
-                        <span className="text-xs font-semibold text-teal-400">{form.targetProbability}/5</span>
-                      </div>
-                      <Slider
-                        min={1} max={5} step={1}
-                        value={[form.targetProbability]}
-                        onValueChange={([v]) => setForm(f => ({ ...f, targetProbability: v }))}
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <Label className="text-xs">Hedeflenen Etki</Label>
-                        <span className="text-xs font-semibold text-teal-400">{form.targetSeverity}/5</span>
-                      </div>
-                      <Slider
-                        min={1} max={5} step={1}
-                        value={[form.targetSeverity]}
-                        onValueChange={([v]) => setForm(f => ({ ...f, targetSeverity: v }))}
-                      />
-                    </div>
-
-                    <ScoreDisplay prob={form.targetProbability} sev={form.targetSeverity} type="risk" label="Hedeflenen Skor" />
+                <Separator />
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <MessageSquarePlus className="w-4 h-4 text-muted-foreground" />
+                    <Label className="text-sm font-semibold">Gerçekleşme Notları</Label>
+                    {editingNotes.length > 0 && (
+                      <Badge variant="secondary" className="text-xs">{editingNotes.length}</Badge>
+                    )}
                   </div>
-                )}
+
+                  {editingNotes.length > 0 ? (
+                    <ScrollArea className="max-h-56 rounded-md border p-3 space-y-3">
+                      <div className="space-y-3">
+                        {editingNotes.map((note) => (
+                          <div key={note.id} className="space-y-1">
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-xs font-semibold text-foreground">{note.userName}</span>
+                                <span className="text-[10px] text-muted-foreground">{formatDate(note.createdAt)}</span>
+                              </div>
+                              {isAdmin && editingNoteId !== note.id && (
+                                <div className="flex gap-1">
+                                  <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => startEditNote(note)}>
+                                    <Pencil className="w-3 h-3" />
+                                  </Button>
+                                  <Button size="icon" variant="ghost" className="h-6 w-6 text-destructive hover:text-destructive" onClick={() => handleDeleteNote(note.id)}>
+                                    <Trash2 className="w-3 h-3" />
+                                  </Button>
+                                </div>
+                              )}
+                            </div>
+                            {editingNoteId === note.id ? (
+                              <div className="space-y-1.5">
+                                <Textarea
+                                  value={editingNoteContent}
+                                  onChange={e => setEditingNoteContent(e.target.value)}
+                                  rows={2}
+                                  className="text-sm"
+                                  autoFocus
+                                />
+                                <div className="flex gap-1.5">
+                                  <Button size="sm" className="h-7 text-xs" disabled={savingNoteId === note.id} onClick={() => handleSaveNote(note.id)}>
+                                    {savingNoteId === note.id ? "Kaydediliyor…" : "Kaydet"}
+                                  </Button>
+                                  <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setEditingNoteId(null)}>İptal</Button>
+                                </div>
+                              </div>
+                            ) : (
+                              <p className="text-sm text-muted-foreground whitespace-pre-wrap">{note.content}</p>
+                            )}
+                            <Separator className="mt-2" />
+                          </div>
+                        ))}
+                      </div>
+                    </ScrollArea>
+                  ) : (
+                    <p className="text-xs text-muted-foreground italic">Henüz not eklenmemiş.</p>
+                  )}
+
+                  {/* Add new note */}
+                  <div className="flex gap-2 items-end">
+                    <div className="flex-1 space-y-1">
+                      <Label className="text-xs">Yeni Not Ekle</Label>
+                      <Textarea
+                        value={newNote}
+                        onChange={e => setNewNote(e.target.value)}
+                        placeholder="Gerçekleşme durumu, gelişme veya güncelleme..."
+                        rows={2}
+                        className="text-sm"
+                      />
+                    </div>
+                    <Button
+                      size="sm"
+                      className="h-[60px] px-3 shrink-0"
+                      disabled={!newNote.trim() || submittingNote}
+                      onClick={handleAddNote}
+                    >
+                      <Send className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
               </>
             )}
-
-            {/* Gerçekleşme Durumu — sadece düzenleme modunda + aksiyon varsa */}
-            {isEditing && isAksiyon && (
-              <div className="space-y-1.5 rounded-md border border-emerald-500/20 bg-emerald-500/5 p-3">
-                <Label className="text-xs font-semibold text-emerald-400 flex items-center gap-1.5">
-                  <ClipboardList className="h-3.5 w-3.5" />
-                  Gerçekleşme Durumu
-                </Label>
-                <Textarea
-                  value={form.occurrenceNote}
-                  onChange={e => setForm(f => ({ ...f, occurrenceNote: e.target.value }))}
-                  placeholder="Aksiyonun gerçekleşme durumu, uygulanan adımlar ve sonuçları hakkında bilgi girin..."
-                  rows={3}
-                />
-              </div>
-            )}
-
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)}>İptal</Button>
-            <Button onClick={handleSave} disabled={createRisk.isPending || updateRisk.isPending}>
-              {isEditing ? "Güncelle" : "Ekle"}
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setDialogOpen(false)}>İptal</Button>
+            <Button onClick={handleSave} disabled={createMut.isPending || updateMut.isPending}>
+              {createMut.isPending || updateMut.isPending ? "Kaydediliyor…" : editId !== null ? "Güncelle" : "Oluştur"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
   );
+}
+
+function ScoreBadgeInline({ score, type }: { score: number; type: string }) {
+  const cfg = type === "firsat" ? opportunityMatrixConfig : riskMatrixConfig;
+  const grade = resolveGrade(score, cfg.grades);
+  return <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-bold ${grade.badgeStyle}`}>{grade.label}</span>;
 }
