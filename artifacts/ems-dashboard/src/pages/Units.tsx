@@ -60,9 +60,10 @@ const EMPTY: UnitForm = { name: "", location: "", type: "fabrika", city: "İstan
 function AdminUnitsTab() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const { setUnitId } = useUnit();
   const { companyId } = useCompany();
+  const isSuperAdmin = user?.role === "superadmin";
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState<UnitForm>(EMPTY);
@@ -71,7 +72,7 @@ function AdminUnitsTab() {
   const [resetMode, setResetMode] = useState<"demo" | "all" | null>(null);
   const [resetLoading, setResetLoading] = useState(false);
 
-  const { data: companies } = useListCompanies({ query: { queryKey: getListCompaniesQueryKey() } });
+  const { data: companies } = useListCompanies({ query: { queryKey: getListCompaniesQueryKey(), enabled: isSuperAdmin } });
   const activeCompanyName = companyId !== null
     ? (companies ?? []).find((c: any) => c.id === companyId)?.name ?? `Firma #${companyId}`
     : null;
@@ -354,7 +355,7 @@ function AdminUnitsTab() {
                     </div>
                   )}
                 </div>
-                {companyId === null && u.companyId && (
+                {isSuperAdmin && u.companyId && (
                   <div className="mt-2 flex items-center gap-1 text-[10px] font-medium text-blue-400">
                     <Building2 className="h-2.5 w-2.5" />
                     <span>{(companies ?? []).find((c: any) => c.id === u.companyId)?.name ?? `Firma #${u.companyId}`}</span>
