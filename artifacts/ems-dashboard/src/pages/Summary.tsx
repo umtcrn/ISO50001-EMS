@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useYear } from "@/context/YearContext";
 import { useUnit } from "@/context/UnitContext";
+import { useCompany } from "@/context/CompanyContext";
 import { useGetSummary, getGetSummaryQueryKey } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -123,13 +124,15 @@ function UnitCard({ unit, grandTotal, color, idx, onSelect }: { unit: any; grand
 export default function Summary() {
   const { year } = useYear();
   const { setUnitId } = useUnit();
+  const { companyId } = useCompany();
   const [view, setView] = useState<ViewMode>("cards");
   const [sortKey, setSortKey] = useState<SortKey>("totalKwh");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 
+  const summaryParams = companyId !== null ? { year, companyId } : { year };
   const { data: summary, isLoading } = useGetSummary(
-    { year },
-    { query: { queryKey: getGetSummaryQueryKey({ year }) } }
+    summaryParams,
+    { query: { queryKey: getGetSummaryQueryKey(summaryParams) } }
   );
 
   const rawUnits: any[] = summary?.units ?? [];

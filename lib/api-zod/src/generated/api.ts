@@ -746,7 +746,8 @@ export const GetSeuBreakdownResponse = zod.array(GetSeuBreakdownResponseItem)
  * @summary Tüm birimler için özet ve karşılaştırma
  */
 export const GetSummaryQueryParams = zod.object({
-  "year": zod.coerce.number().optional()
+  "year": zod.coerce.number().optional(),
+  "companyId": zod.coerce.number().optional()
 })
 
 export const GetSummaryResponse = zod.object({

@@ -8,4 +8,5 @@
 
 export type GetSummaryParams = {
 year?: number;
+companyId?: number;
 };

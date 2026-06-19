@@ -11,10 +11,12 @@ router.get("/summary", requireAuth, async (req, res) => {
     const { role, companyId: sessionCompanyId } = req.user!;
     const year = req.query.year ? parseInt(req.query.year as string) : new Date().getFullYear();
     const prevYear = year - 1;
+    const queryCompanyId = req.query.companyId ? parseInt(req.query.companyId as string) : undefined;
+    const effectiveCompanyId = role === "superadmin" ? queryCompanyId : sessionCompanyId;
 
-    // Admin: sadece kendi firmasının birimleri; superadmin: tümü
+    // Admin: sadece kendi firmasının birimleri; superadmin: tümü veya seçili firma
     const unitsConds = [eq(unitsTable.active, true)];
-    if (role === "admin") unitsConds.push(eq(unitsTable.companyId, sessionCompanyId));
+    if (effectiveCompanyId !== undefined) unitsConds.push(eq(unitsTable.companyId, effectiveCompanyId));
     const units = await db.select().from(unitsTable)
       .where(and(...unitsConds))
       .orderBy(unitsTable.name);
