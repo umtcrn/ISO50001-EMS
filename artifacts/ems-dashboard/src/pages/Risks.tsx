@@ -141,8 +141,6 @@ function formatDate(dateStr: string): string {
   }
 }
 
-const API_BASE = import.meta.env.VITE_API_URL ?? "http://localhost:8080";
-
 export default function Risks() {
   const { unitId: activeUnitId } = useUnit();
   const { companyId } = useCompany();
@@ -284,7 +282,7 @@ export default function Risks() {
     if (!newNote.trim() || editId === null) return;
     setSubmittingNote(true);
     try {
-      const res = await fetch(`${API_BASE}/api/risks/${editId}/notes`, {
+      const res = await fetch(`/api/risks/${editId}/notes`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ content: newNote.trim() }),
@@ -304,7 +302,7 @@ export default function Risks() {
     if (!editingNoteContent.trim() || editId === null) return;
     setSavingNoteId(noteId);
     try {
-      const res = await fetch(`${API_BASE}/api/risks/${editId}/notes/${noteId}`, {
+      const res = await fetch(`/api/risks/${editId}/notes/${noteId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ content: editingNoteContent.trim() }),
@@ -323,7 +321,7 @@ export default function Risks() {
   async function handleDeleteNote(noteId: number) {
     if (!confirm("Bu notu silmek istiyor musunuz?") || editId === null) return;
     try {
-      const res = await fetch(`${API_BASE}/api/risks/${editId}/notes/${noteId}`, {
+      const res = await fetch(`/api/risks/${editId}/notes/${noteId}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });
