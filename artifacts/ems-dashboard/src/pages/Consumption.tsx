@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Plus, Pencil, Trash2, Loader2, Building2, Upload, Download, FileSpreadsheet, FileText } from "lucide-react";
@@ -399,6 +399,30 @@ export default function Consumption() {
                   );
                 })}
               </TableBody>
+              {filteredRecords.length > 0 && (() => {
+                const totalKwh = filteredRecords.reduce((s, r) => s + (r.kwh ?? 0), 0);
+                const totalTep = filteredRecords.reduce((s, r) => s + (r.tep ?? 0), 0);
+                const totalCo2 = filteredRecords.reduce((s, r) => s + (r.co2 ?? 0), 0);
+                return (
+                  <TableFooter>
+                    <TableRow className="font-semibold text-sm bg-muted/30">
+                      <TableCell colSpan={5} className="text-muted-foreground text-xs">
+                        TOPLAM ({filteredRecords.length} kayıt)
+                      </TableCell>
+                      <TableCell className="text-right font-mono">
+                        {totalKwh.toLocaleString("tr-TR", { maximumFractionDigits: 2 })}
+                      </TableCell>
+                      <TableCell className="text-right font-mono">
+                        {totalTep.toFixed(4)}
+                      </TableCell>
+                      <TableCell className="text-right font-mono">
+                        {totalCo2.toFixed(2)}
+                      </TableCell>
+                      <TableCell colSpan={3} />
+                    </TableRow>
+                  </TableFooter>
+                );
+              })()}
             </Table>
           )}
         </CardContent>
