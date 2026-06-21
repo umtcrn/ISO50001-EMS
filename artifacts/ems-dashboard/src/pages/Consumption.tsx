@@ -8,13 +8,15 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Pencil, Trash2, Loader2, Building2, Upload } from "lucide-react";
+import { Plus, Pencil, Trash2, Loader2, Building2, Upload, Download, FileSpreadsheet, FileText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useYear } from "@/context/YearContext";
 import ConsumptionImport from "@/components/ConsumptionImport";
+import * as XLSX from "xlsx";
 
 const MONTHS = ["Ocak","Şubat","Mart","Nisan","Mayıs","Haziran","Temmuz","Ağustos","Eylül","Ekim","Kasım","Aralık"];
 const TYPE_COLORS: Record<string, string> = {
@@ -235,6 +237,55 @@ export default function Consumption() {
     return m?.energyUseGroupName ?? null;
   };
 
+  function buildExportRows() {
+    return filteredRecords.map((r: any) => {
+      const m = (allMeters ?? []).find(m => m.id === r.meterId);
+      const src = (energySources ?? []).find(s => s.id === m?.energySourceId);
+      const su = (subUnits ?? []).find(s => s.id === m?.subUnitId);
+      return {
+        "Kaynak": src?.name ?? m?.type ?? "",
+        "Kullanım Grubu": m?.energyUseGroupName ?? "",
+        "Alt Birim": su?.name ?? "",
+        "Sayaç": r.meterName ?? "",
+        "Yıl": r.year,
+        "Ay": MONTHS[(r.month ?? 1) - 1],
+        [`Tüketim (${m?.unit ?? "kWh"})`]: r.kwh ?? 0,
+        "TEP": r.tep ?? 0,
+        "CO2 (ton)": r.co2 ?? 0,
+        "HDD": r.hdd ?? "",
+        "CDD": r.cdd ?? "",
+        "Not": r.notes ?? "",
+      };
+    });
+  }
+
+  function exportExcel() {
+    const rows = buildExportRows();
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Tüketim");
+    XLSX.writeFile(wb, `tuketim_${year}.xlsx`);
+  }
+
+  function exportCsv() {
+    const rows = buildExportRows();
+    if (rows.length === 0) return;
+    const headers = Object.keys(rows[0]);
+    const lines = [
+      headers.join(";"),
+      ...rows.map(row => headers.map(h => {
+        const v = (row as any)[h];
+        const s = String(v ?? "");
+        return s.includes(";") || s.includes('"') || s.includes("\n") ? `"${s.replace(/"/g, '""')}"` : s;
+      }).join(";")),
+    ];
+    const blob = new Blob(["\uFEFF" + lines.join("\r\n")], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = `tuketim_${year}.csv`; a.click();
+    URL.revokeObjectURL(url);
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -243,6 +294,21 @@ export default function Consumption() {
           <p className="text-sm text-muted-foreground mt-1">{year} yılı enerji tüketim kayıtları</p>
         </div>
         <div className="flex gap-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="gap-2" disabled={filteredRecords.length === 0}>
+                <Download className="h-4 w-4" /> Dışa Aktar
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={exportExcel} className="gap-2 cursor-pointer">
+                <FileSpreadsheet className="h-4 w-4 text-emerald-400" /> Excel (.xlsx)
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={exportCsv} className="gap-2 cursor-pointer">
+                <FileText className="h-4 w-4 text-blue-400" /> CSV (.csv)
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Button variant="outline" onClick={() => setImportOpen(true)} className="gap-2"><Upload className="h-4 w-4" /> Toplu İçe Aktar</Button>
           <Button onClick={openCreate} className="gap-2"><Plus className="h-4 w-4" /> Veri Ekle</Button>
         </div>
