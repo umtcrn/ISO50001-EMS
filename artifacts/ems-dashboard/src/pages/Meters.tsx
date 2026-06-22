@@ -581,6 +581,32 @@ export default function Meters() {
               onIlceChange={v => setForm(f => ({ ...f, ilce: v }))}
               ilLabel="İl (HDD/CDD için)"
             />
+            {(() => {
+              if (!form.subUnitId) return null;
+              const su = (subUnits ?? []).find(s => s.id.toString() === form.subUnitId);
+              if (!su?.city) return null;
+              const suParsed = parseIlIlce(su.city);
+              const suIl = suParsed.il || su.city;
+              const meterIl = form.il;
+              const meterIlce = form.ilce;
+              const suIlce = suParsed.ilce;
+              const ilDiffers = suIl && meterIl && suIl !== meterIl;
+              const ilceDiffers = !ilDiffers && suIlce && meterIlce && suIlce !== meterIlce;
+              if (!ilDiffers && !ilceDiffers) return null;
+              const suLabel = suIlce ? `${suIl} / ${suIlce}` : suIl;
+              const meterLabel = meterIlce ? `${meterIl} / ${meterIlce}` : meterIl;
+              return (
+                <div className="flex gap-2.5 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3">
+                  <AlertCircle className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
+                  <div className="text-xs text-amber-300 space-y-0.5">
+                    <p className="font-medium">Seçtiğiniz sayaç lokasyonu, bağlı alt birimin lokasyonundan farklı.</p>
+                    <p>Alt birim: <span className="font-semibold">{suLabel}</span></p>
+                    <p>Sayaç lokasyonu: <span className="font-semibold">{meterLabel}</span></p>
+                    <p className="text-amber-400/80 mt-1">HDD/CDD değerleri sayaç lokasyonuna göre hesaplanacaktır.</p>
+                  </div>
+                </div>
+              );
+            })()}
             <div className="space-y-1.5">
               <Label>Açıklama</Label>
               <Input value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="İsteğe bağlı" />
