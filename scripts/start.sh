@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-cd /home/runner/workspace/Energy-Insights-Hub/Energy-Insights-Hub
+cd /home/runner/workspace
 
 # Build API server
 echo "[start] Building API server..."
