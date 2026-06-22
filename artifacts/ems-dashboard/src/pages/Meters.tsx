@@ -13,12 +13,9 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Plus, Pencil, Trash2, Gauge, MapPin, CloudLightning, Layers } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { parseIlIlce, buildCityValue } from "@/data/turkiyeIlIlce";
+import { IlIlceSelector } from "@/components/ui/IlIlceSelector";
 
-const UNITS = ["kWh", "m3", "ton", "litre", "MWh", "GJ"];
-const CITIES = [
-  "Adana","Ankara","Antalya","Bursa","Diyarbakır","Eskişehir",
-  "Gaziantep","İstanbul","İzmir","Kayseri","Kocaeli","Konya","Mersin","Samsun","Trabzon",
-];
 const TYPE_COLORS: Record<string, string> = {
   elektrik: "bg-yellow-500/10 text-yellow-400 border-yellow-500/20",
   dogalgaz: "bg-blue-500/10 text-blue-400 border-blue-500/20",
@@ -61,13 +58,15 @@ function uiRecordTypeLabel(rt: string | null | undefined): string {
 
 interface MeterForm {
   name: string; type: string; energySourceId: string; subUnitId: string;
-  location: string; city: string; unit: string; description: string;
+  location: string; city: string; il: string; ilce: string;
+  unit: string; description: string;
   unitId: string; energyUseGroupId: string;
   uiRecordType: "measurement" | "manual";
 }
 const EMPTY_FORM: MeterForm = {
   name: "", type: "elektrik", energySourceId: "", subUnitId: "",
-  location: "", city: "İstanbul", unit: "kWh", description: "",
+  location: "", city: "İstanbul", il: "İstanbul", ilce: "",
+  unit: "kWh", description: "",
   unitId: "", energyUseGroupId: "",
   uiRecordType: "measurement",
 };
@@ -208,11 +207,15 @@ export default function Meters() {
     setEditing(null);
     const chosenSubUnit = subUnits?.find(s => s.id.toString() === filterSubUnit);
     const chosenSource = energySources?.find(s => s.id.toString() === filterSource);
+    const rawCity = chosenSubUnit?.city ?? "İstanbul";
+    const parsed = parseIlIlce(rawCity);
     setForm({
       ...EMPTY_FORM,
       unitId: workingUnitId?.toString() ?? "",
       subUnitId: filterSubUnit !== "all" ? filterSubUnit : "",
-      city: chosenSubUnit?.city ?? "İstanbul",
+      city: rawCity,
+      il: parsed.il || "İstanbul",
+      ilce: parsed.ilce,
       energySourceId: filterSource !== "all" ? filterSource : "",
       type: chosenSource?.type ?? "elektrik",
       unit: chosenSource?.unit ?? "kWh",
@@ -222,11 +225,14 @@ export default function Meters() {
 
   function openEdit(m: any) {
     setEditing(m.id);
+    const rawCity = m.city ?? "İstanbul";
+    const parsed = parseIlIlce(rawCity);
     setForm({
       name: m.name, type: m.type,
       energySourceId: m.energySourceId?.toString() ?? "",
       subUnitId: m.subUnitId?.toString() ?? "",
-      location: m.location, city: m.city ?? "İstanbul",
+      location: m.location ?? "", city: rawCity,
+      il: parsed.il || "İstanbul", ilce: parsed.ilce,
       unit: m.unit, description: m.description ?? "",
       unitId: m.unitId?.toString() ?? "",
       energyUseGroupId: m.energyUseGroupId?.toString() ?? "",
@@ -237,7 +243,12 @@ export default function Meters() {
 
   function handleSubUnitChange(v: string) {
     const su = subUnits?.find(s => s.id.toString() === v);
-    setForm(f => ({ ...f, subUnitId: v, city: su?.city ?? f.city }));
+    if (su?.city) {
+      const parsed = parseIlIlce(su.city);
+      setForm(f => ({ ...f, subUnitId: v, city: su.city, il: parsed.il || f.il, ilce: parsed.ilce }));
+    } else {
+      setForm(f => ({ ...f, subUnitId: v }));
+    }
   }
 
   function handleEnergySourceChange(v: string) {
@@ -246,8 +257,10 @@ export default function Meters() {
   }
 
   function handleSave() {
-    if (!form.name || !form.location) { toast({ title: "Ad ve lokasyon zorunludur", variant: "destructive" }); return; }
-    editing !== null ? updateMut.mutate(form) : createMut.mutate(form);
+    if (!form.name) { toast({ title: "Sayaç adı zorunludur", variant: "destructive" }); return; }
+    const city = buildCityValue(form.il, form.ilce);
+    const formWithCity = { ...form, city };
+    editing !== null ? updateMut.mutate(formWithCity) : createMut.mutate(formWithCity);
   }
 
   function handleQuickGroupSave() {
@@ -443,31 +456,16 @@ export default function Meters() {
               <Label>Sayaç Adı *</Label>
               <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="ör. Ana Elektrik Panosu" />
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>Lokasyon *</Label>
-                <Input value={form.location} onChange={e => setForm(f => ({ ...f, location: e.target.value }))} placeholder="ör. A Blok - Zemin Kat" />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Şehir (HDD/CDD)</Label>
-                <Select value={form.city} onValueChange={v => setForm(f => ({ ...f, city: v }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>{CITIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>Ölçü Birimi *</Label>
-                <Select value={form.unit} onValueChange={v => setForm(f => ({ ...f, unit: v }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>{UNITS.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}</SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label>Açıklama</Label>
-                <Input value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="İsteğe bağlı" />
-              </div>
+            <IlIlceSelector
+              il={form.il}
+              ilce={form.ilce}
+              onIlChange={v => setForm(f => ({ ...f, il: v, ilce: "" }))}
+              onIlceChange={v => setForm(f => ({ ...f, ilce: v }))}
+              ilLabel="İl (HDD/CDD için)"
+            />
+            <div className="space-y-1.5">
+              <Label>Açıklama</Label>
+              <Input value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="İsteğe bağlı" />
             </div>
           </div>
           <DialogFooter>
