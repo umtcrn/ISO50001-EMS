@@ -13,14 +13,10 @@ import { Switch } from "@/components/ui/switch";
 import { Plus, Pencil, Trash2, MapPin, Building2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-
-const CITIES = [
-  "Adana","Ankara","Antalya","Bursa","Diyarbakır","Eskişehir",
-  "Gaziantep","İstanbul","İzmir","Kayseri","Kocaeli","Konya","Mersin","Samsun","Trabzon",
-];
+import { IL_NAMES, getIlceler, parseIlIlce, buildCityValue } from "@/data/turkiyeIlIlce";
 
 interface SubUnit { id: number; unitId: number; companyId: number; name: string; city: string; description?: string | null; active: boolean; }
-interface SubUnitForm { unitId: string; name: string; city: string; description: string; active: boolean; }
+interface SubUnitForm { unitId: string; name: string; city: string; il: string; ilce: string; description: string; active: boolean; }
 
 const API = (token: string | null, method: string, body?: unknown, id?: number) =>
   fetch(id ? `/api/sub-units/${id}` : "/api/sub-units", {
@@ -39,7 +35,7 @@ export default function SubUnitsTab({ unitId }: { unitId?: number }) {
 
   const isSuperAdmin = user?.role === "superadmin";
   const effectiveUnitId = user?.role !== "admin" && user?.role !== "superadmin" ? user?.unitId : unitId;
-  const EMPTY: SubUnitForm = { unitId: effectiveUnitId?.toString() ?? "", name: "", city: "İstanbul", description: "", active: true };
+  const EMPTY: SubUnitForm = { unitId: effectiveUnitId?.toString() ?? "", name: "", city: "İstanbul", il: "İstanbul", ilce: "", description: "", active: true };
   const [form, setForm] = useState<SubUnitForm>(EMPTY);
 
   const { data: allUnits } = useListUnits({}, { query: { queryKey: [...getListUnitsQueryKey({}), companyId] } });
@@ -71,8 +67,19 @@ export default function SubUnitsTab({ unitId }: { unitId?: number }) {
   }
 
   function openCreate() { setEditingId(null); setForm({ ...EMPTY, unitId: effectiveUnitId?.toString() ?? "" }); setOpen(true); }
-  function openEdit(s: SubUnit) { setEditingId(s.id); setForm({ unitId: s.unitId.toString(), name: s.name, city: s.city, description: s.description ?? "", active: s.active }); setOpen(true); }
-  function handleSave() { if (!form.name) { toast({ title: "Ad zorunludur", variant: "destructive" }); return; } editingId ? updateMut.mutate(form) : createMut.mutate(form); }
+  function openEdit(s: SubUnit) {
+    setEditingId(s.id);
+    const parsed = parseIlIlce(s.city ?? "");
+    setForm({ unitId: s.unitId.toString(), name: s.name, city: s.city, il: parsed.il || "İstanbul", ilce: parsed.ilce, description: s.description ?? "", active: s.active });
+    setOpen(true);
+  }
+  function handleSave() {
+    if (!form.name) { toast({ title: "Ad zorunludur", variant: "destructive" }); return; }
+    if (!form.il) { toast({ title: "İl seçimi zorunludur", variant: "destructive" }); return; }
+    const city = buildCityValue(form.il, form.ilce);
+    const formWithCity = { ...form, city };
+    editingId ? updateMut.mutate(formWithCity) : createMut.mutate(formWithCity);
+  }
 
   return (
     <>
@@ -151,12 +158,25 @@ export default function SubUnitsTab({ unitId }: { unitId?: number }) {
               <Label>Alt Birim / Lokasyon Adı *</Label>
               <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="ör. A Blok, Üretim Sahası, Depo 2" />
             </div>
-            <div className="space-y-1.5">
-              <Label>Şehir (HDD/CDD için)</Label>
-              <Select value={form.city} onValueChange={v => setForm(f => ({ ...f, city: v }))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>{CITIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
-              </Select>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>İl * (HDD/CDD için)</Label>
+                <Select value={form.il} onValueChange={v => setForm(f => ({ ...f, il: v, ilce: "" }))}>
+                  <SelectTrigger><SelectValue placeholder="İl seçin" /></SelectTrigger>
+                  <SelectContent className="max-h-60">
+                    {IL_NAMES.map(il => <SelectItem key={il} value={il}>{il}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>İlçe</Label>
+                <Select value={form.ilce} onValueChange={v => setForm(f => ({ ...f, ilce: v }))} disabled={!form.il}>
+                  <SelectTrigger><SelectValue placeholder="İlçe seçin" /></SelectTrigger>
+                  <SelectContent className="max-h-60">
+                    {getIlceler(form.il).map(ilce => <SelectItem key={ilce} value={ilce}>{ilce}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
             <div className="space-y-1.5">
               <Label>Açıklama</Label>
