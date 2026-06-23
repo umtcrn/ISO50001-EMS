@@ -16,7 +16,7 @@
 
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
-import { eq, and, inArray } from "drizzle-orm";
+import { eq, and, inArray, sql } from "drizzle-orm";
 import { readFile } from "fs/promises";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
@@ -278,6 +278,8 @@ async function importInternal() {
       company = bySubdomain;
       trackSkip(1);
     } else {
+      await db.execute(sql`SELECT setval(pg_get_serial_sequence('"companies"', 'id'), COALESCE((SELECT MAX(id) FROM companies), 1), true)`);
+      console.log("  🔧 companies sequence senkronize edildi");
       const [inserted] = await db.insert(companiesTable).values({
         name: companyData.name,
         subdomain: companyData.subdomain,
