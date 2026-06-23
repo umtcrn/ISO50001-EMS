@@ -106,7 +106,7 @@ router.post("/meters", requireAuth, async (req, res) => {
     }
 
     const [meter] = await db.insert(metersTable).values({
-      name, type, recordType, location,
+      name, type, recordType, location: location ?? "",
       city: city || "Istanbul",
       unit, description: description || null,
       unitId: parsedUnitId,

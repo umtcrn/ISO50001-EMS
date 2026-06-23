@@ -306,11 +306,12 @@ export default function Meters() {
         "Enerji Kullanım Grubu": "",
         "İl": "İstanbul",
         "İlçe": "Beşiktaş",
+        "Konum": "Kat 1 Ana Pano",
         "Açıklama": "İsteğe bağlı açıklama",
       },
     ];
     const ws = XLSX.utils.json_to_sheet(rows);
-    ws["!cols"] = [{ wch: 30 }, { wch: 12 }, { wch: 20 }, { wch: 20 }, { wch: 25 }, { wch: 15 }, { wch: 15 }, { wch: 30 }];
+    ws["!cols"] = [{ wch: 30 }, { wch: 12 }, { wch: 20 }, { wch: 20 }, { wch: 25 }, { wch: 15 }, { wch: 15 }, { wch: 25 }, { wch: 30 }];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Şablon");
     XLSX.writeFile(wb, "sayac_sablonu.xlsx");
@@ -355,6 +356,7 @@ export default function Meters() {
             type: es?.type ?? "diger",
             unit: es?.unit ?? "kWh",
             city,
+            location: row["Konum"]?.toString().trim() || "",
             description: row["Açıklama"]?.toString().trim() || undefined,
             unitId: workingUnitId,
             subUnitId: su?.id || undefined,
