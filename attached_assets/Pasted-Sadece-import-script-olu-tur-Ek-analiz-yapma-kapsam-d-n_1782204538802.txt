@@ -1,0 +1,102 @@
+Sadece import script oluştur. Ek analiz yapma, kapsam dışına çıkma.
+
+Amaç:
+lib/demo-data/internal/ klasöründeki JSON fixture dosyalarını okuyup "ISO 50001 Kontrol Demo" şirketine import edecek scripts/src/import-internal.ts dosyasını oluşturmak istiyorum.
+
+Kapsam:
+- Sadece scripts/src/import-internal.ts oluştur.
+- scripts/package.json içine import:internal komutunu ekle.
+- Schema değiştirme.
+- Migration oluşturma.
+- Mevcut seed-internal.ts dosyasına dokunma.
+- Mevcut export-internal.ts dosyasına dokunma.
+- API route dosyalarına dokunma.
+- Mevcut public demo verilerine dokunma.
+- companyId=1 verilerine kesinlikle dokunma.
+- Reset/delete işlemi yapma.
+- Sadece upsert / findOrCreate mantığı kullan.
+
+Çalıştırma komutu:
+pnpm --filter scripts import:internal
+
+Kaynak klasör:
+lib/demo-data/internal/
+
+Okunacak dosyalar:
+- company.json
+- users.json
+- units.json
+- sub-units.json
+- energy-sources.json
+- energy-use-groups.json
+- meters.json
+- consumption.json
+- variables.json
+- variable-values.json
+- swot-items.json
+- risks.json
+- risk-notes.json
+- seu-items.json
+- energy-targets.json
+
+Import kuralları:
+1. Şirketi company.json içinden oku.
+2. Şirketi name ile bul, yoksa oluştur.
+3. Şirket subdomain çakışırsa mevcut şirketi name ile kullan.
+4. Tüm kayıtlar bu şirketin companyId değeriyle oluşturulsun.
+5. JSON içindeki stable key alanlarını kullan:
+   - unitKey
+   - subUnitKey
+   - energySourceKey
+   - energyUseGroupKey
+   - meterKey
+   - variableKey
+6. Database id değerlerini JSON’dan bekleme.
+7. Import sırasında key → database id map oluştur.
+8. Import sırası:
+   - company
+   - units
+   - users
+   - sub-units
+   - energy-sources
+   - energy-use-groups
+   - meters
+   - consumption
+   - variables
+   - variable-values
+   - swot-items
+   - risks
+   - risk-notes
+   - seu-items
+   - energy-targets
+9. Users için passwordHash JSON’dan okunmasın.
+10. Import edilen demo kullanıcılar için varsayılan şifre admin123 olsun.
+11. Kullanıcı username varsa duplicate oluşturma, mevcut kullanıcıyı kullan.
+12. Units için aynı companyId + name varsa mevcut kaydı kullan.
+13. Sub-units için aynı unitId + name varsa mevcut kaydı kullan.
+14. Energy sources için aynı unitId + name varsa mevcut kaydı kullan.
+15. Energy use groups için aynı companyId + name + mümkünse unit/subUnit ilişkisine göre mevcut kaydı kullan.
+16. Meters için aynı companyId + name + subUnitId varsa mevcut kaydı kullan.
+17. Consumption için aynı meterId + year + month varsa yeni kayıt oluşturma, mevcut kaydı güncelle veya atla. Duplicate oluşturma.
+18. Boş array dosyaları sorunsuz işlensin.
+19. Eksik opsiyonel alanlar hata vermesin.
+20. Import sonunda özet yaz:
+   - kaç company işlendi
+   - kaç unit
+   - kaç subUnit
+   - kaç energySource
+   - kaç energyUseGroup
+   - kaç meter
+   - kaç consumption
+   - kaç user
+   - kaç variable
+   - kaç kayıt eklendi
+   - kaç kayıt zaten vardı / atlandı
+
+Güvenlik:
+- Import script kesinlikle delete yapmasın.
+- Public demo şirketine dokunmasın.
+- companyId=1 için işlem yapmasın.
+- Sadece fixture dosyalarından okuma yapıp hedef internal demo şirketine yazsın.
+
+Son olarak typecheck çalıştır ve sonucu kısa özetle.
