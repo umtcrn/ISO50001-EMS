@@ -164,8 +164,6 @@ interface ConsumptionJson {
   hdd?: number | null;
   cdd?: number | null;
   notes?: string | null;
-  weatherStationName?: string | null;
-  weatherStationNote?: string | null;
 }
 
 interface VariableJson {
@@ -595,8 +593,6 @@ async function importInternal() {
       hdd: c.hdd ?? null,
       cdd: c.cdd ?? null,
       notes: c.notes ?? null,
-      weatherStationName: c.weatherStationName ?? null,
-      weatherStationNote: c.weatherStationNote ?? null,
     });
 
     existingSet.add(key); // aynı çalıştırmada tekrar eklemeyi önle
