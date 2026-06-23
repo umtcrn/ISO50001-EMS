@@ -5,7 +5,7 @@ router = "application"
 deploymentTarget = "autoscale"
 
 [deployment.postBuild]
-args = ["pnpm", "install", "--frozen-lockfile", "&&", "pnpm", "store", "prune"]
+args = ["sh", "-c", "pnpm install --frozen-lockfile && pnpm store prune"]
 env = { "CI" = "true" }
 
 [workflows]
