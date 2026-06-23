@@ -1,0 +1,94 @@
+Sadece export script oluştur. Import script yazma.
+
+Amaç:
+Internal demo şirketindeki mevcut verileri JSON fixture dosyaları olarak dışa aktarmak istiyorum. Bu export işlemi ileride GitHub'a commit edilip başka Replit hesabında demo verileri yeniden kurmak için kullanılacak.
+
+Kapsam:
+
+* Sadece scripts/src/export-internal.ts dosyasını oluştur.
+* scripts/package.json içine export:internal komutunu ekle.
+* Database'e hiçbir insert/update/delete yapma.
+* Schema değiştirme.
+* Migration oluşturma.
+* seed-internal.ts dosyasına dokunma.
+* Mevcut seed.ts veya API seed route dosyalarına dokunma.
+* Import script yazma.
+
+Export edilecek şirket:
+
+* Şirket adı: ISO 50001 Kontrol Demo
+* Şirketi name üzerinden bul.
+* Bulamazsa hata ver ve çık.
+* Yeni şirket oluşturma.
+
+Çıktı klasörü:
+
+* lib/demo-data/internal/
+
+Üretilecek dosyalar:
+
+* company.json
+* users.json
+* units.json
+* sub-units.json
+* energy-sources.json
+* energy-use-groups.json
+* meters.json
+* consumption.json
+* variables.json
+* variable-values.json
+
+Ek olarak, tabloda veri yoksa boş array yaz:
+
+* swot-items.json
+* risks.json
+* risk-notes.json
+* seu-items.json
+* energy-targets.json
+
+Önemli veri kuralları:
+
+1. Database id değerlerini ana referans olarak export etme.
+2. İlişkileri mümkün olduğunca stable key mantığıyla yaz.
+3. Schema değiştirmediğimiz için externalKey DB'ye ekleme.
+4. Export sırasında stable key üret:
+
+   * unitKey: unit adından slug
+   * subUnitKey: unitKey + subUnit adından slug
+   * energySourceKey: unitKey + energy source adından slug
+   * energyUseGroupKey: unitKey/subUnitKey + grup adından slug
+   * meterKey: subUnitKey + meter adından slug
+   * variableKey: variable code varsa code, yoksa name slug
+5. Aynı isimden dolayı key çakışması olursa sonuna mevcut database id ekleyerek benzersiz yap. Ama id sadece çakışma önleme suffix'i olarak kullanılsın.
+6. Consumption kayıtlarında meterId yerine meterKey kullan.
+7. Users kayıtlarında passwordHash export edilmesin.
+8. Users kayıtlarında unitId yerine unitKey yazılsın.
+9. Sayaçlarda unitId, subUnitId, energySourceId, energyUseGroupId yerine ilgili key alanları yazılsın.
+10. Tüketim verilerinde year, month, kwh, tep, co2, hdd, cdd, cost, notes gibi mevcut alanlar korunabildiği kadar korunsun.
+11. Variable values kayıtlarında variableId, unitId, subUnitId, meterId yerine key alanları yazılsın.
+12. createdAt / updatedAt gibi teknik alanları export etme.
+
+Komut:
+scripts/package.json içine şu komutu ekle:
+
+* export:internal
+
+Çalıştırma:
+pnpm --filter scripts export:internal
+
+Script sonunda şu özeti yaz:
+
+* Kaç unit export edildi
+* Kaç subUnit export edildi
+* Kaç energySource export edildi
+* Kaç energyUseGroup export edildi
+* Kaç meter export edildi
+* Kaç consumption export edildi
+* Kaç user export edildi
+* Kaç variable export edildi
+* Çıktı klasörü yolu
+
+Güvenlik:
+Bu script salt okunur olmalı. DB üzerinde hiçbir değişiklik yapmamalı.
+
+Son olarak typecheck çalıştır ve sonucu özetle.
