@@ -1,0 +1,84 @@
+SEU/ÖEK modülüne geçmeden önce HDD/CDD veri doğruluğunu ve weather-degree-days/sync akışını düzelt.
+
+Mevcut kritik sorun:
+- Örneklem methodu ile yapılan kontrolde 2024 Van MGM resmi HDD değerleri Ocak 528, Şubat 498.
+- Sistemde ise Ocak 495.8, Şubat 437.9 görünüyor.
+- Aynı sorun 2025 için de var.
+- Bu fark SEU, EnPI ve tüketim normalizasyonunu yanlış etkiler.
+
+Önce mevcut akışı analiz et:
+- HDD/CDD hangi veri kaynağından geliyor?
+- Hangi lokasyon/istasyon kullanılıyor?
+- Van için hangi MGM istasyonu seçiliyor?
+- Aylık HDD/CDD günlük değerlerin toplamı olarak mı alınıyor, yoksa aylık ortalama sıcaklıktan mı hesaplanıyor?
+- Van 2024 Ocak/Şubat değerlerinin neden MGM resmi değerinden farklı çıktığını tespit et.
+
+Beklenen temel kural:
+- Resmi MGM aylık HDD/CDD değeri varsa sistem öncelikle onu kullanmalı.
+- Aylık tüketim dönemlerinde resmi aylık MGM değeri kullanılmalı.
+- Aylık ortalama sıcaklıktan HDD/CDD hesaplanmamalı.
+- Resmi değer yoksa ancak o zaman günlük veriden hesaplanan aylık toplam fallback olarak kullanılabilir.
+- Resmi değer ile hesaplanan değer UI’da karıştırılmamalı.
+
+MGM metodolojisi:
+- HDD günlük hesaplanır: Eğer günlük ortalama sıcaklık Tm <= 15 ise HDD = 18 - Tm, değilse 0.
+- CDD günlük hesaplanır: Eğer günlük ortalama sıcaklık Tm > 22 ise CDD = Tm - 22, değilse 0.
+- Aylık HDD/CDD, günlük HDD/CDD değerlerinin toplamıdır.
+- Aylık ortalama sıcaklık üzerinden HDD/CDD hesaplama yapılmamalıdır.
+
+Lokasyon/istasyon eşleştirme kuralı:
+- Sayaç city/location alanı il/ilçe formatındaysa parse edilerek il + ilçe ayrılmalı.
+- Önce il + ilçe birebir MGM istasyonu aranmalı.
+- Birebir yoksa aynı il içinde fallback istasyon kullanılmalı.
+- Fallback kullanılırsa API response ve UI’da açıklayıcı not gösterilmeli.
+- Sadece il bazlı rastgele eşleşme yapılmamalı.
+- /api/weather-degree-days/sync endpointi de consumption MGM lookup mantığıyla aynı doğrulukta çalışmalı.
+
+Veritabanı:
+- Resmi aylık MGM değerlerini tutmak için weather_degree_days yapısını kontrol et.
+- Yoksa migration ile aşağıdaki alanları destekleyecek şekilde oluştur/güncelle:
+  - id
+  - company_id nullable
+  - province
+  - district nullable
+  - station_code nullable
+  - station_name nullable
+  - year
+  - month
+  - hdd numeric
+  - cdd numeric
+  - source text default 'MGM'
+  - source_url nullable
+  - is_official boolean default true
+  - data_method text: official_monthly | calculated_daily | fallback
+  - station_note nullable
+  - imported_at
+  - created_at
+  - updated_at
+
+Kullanım önceliği:
+1. Önce weather_degree_days tablosundaki resmi MGM aylık değer kullanılsın.
+2. Resmi aylık değer yoksa günlük veriden hesaplanan aylık toplam kullanılabilir.
+3. Hesaplanan değer kullanılırsa UI’da “Günlük veriden hesaplandı” yazsın.
+4. Resmi değer kullanılırsa UI’da “Kaynak: MGM Resmi Aylık Veri” yazsın.
+
+Test/demo verisi:
+- Van, 2024, Ocak, HDD 528, CDD 0, source MGM, is_official true, data_method official_monthly
+- Van, 2024, Şubat, HDD 498, CDD 0, source MGM, is_official true, data_method official_monthly
+- Bu seed/demo veri idempotent olmalı, tekrar çalıştırıldığında duplicate oluşturmamalı.
+
+UI:
+- /degiskenler ekranında İklim Verileri sekmesinde HDD/CDD kaynağı gösterilsin:
+  - Kaynak: MGM Resmi Aylık Veri
+  - veya Kaynak: Günlük Veriden Hesaplandı
+  - varsa fallback/istasyon notu
+- /consumption ekranında otomatik gelen HDD/CDD değerinin kaynağı ve istasyon bilgisi gösterilsin.
+- “Sayacın şehrine göre” gibi ifadeler “sayaç lokasyonuna göre” şeklinde güncellensin.
+
+Teknik şartlar:
+- Mevcut çalışan tüketim ve değişken kayıtlarını bozma.
+- Multi-tenant companyId filtrelerini koru.
+- Duplicate weather_degree_days kaydı oluşturma.
+- TypeScript/build hatası bırakma.
+- Drizzle migration gerekiyorsa migration olarak ekle.
+- Sonunda hangi dosyalarda ne değiştiğini kısa özetle.

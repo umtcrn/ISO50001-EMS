@@ -514,14 +514,20 @@ router.post("/weather-degree-days/sync", requireAuth, async (req, res) => {
         companyId,
         province: station.il,
         district: station.ilce ?? null,
+        stationCode: station.stationCode,
+        stationName: station.name,
         date: `${row.year}-${String(row.month).padStart(2, "0")}`,
+        year: row.year,
+        month: row.month,
         periodType: "monthly" as const,
-        baseTemperatureHeating: 15,
+        baseTemperatureHeating: 18,
         baseTemperatureCooling: 22,
         hdd: row.hdd,
         cdd: row.cdd,
         avgTemperature: null,
         source: "mgm",
+        isOfficial: false,
+        dataMethod: "calculated_daily",
       };
     });
 

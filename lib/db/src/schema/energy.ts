@@ -359,7 +359,11 @@ export const weatherDegreeDaysTable = pgTable("weather_degree_days", {
   companyId: integer("company_id").references(() => companiesTable.id),
   province: text("province").notNull(),
   district: text("district"),
+  stationCode: text("station_code"),
+  stationName: text("station_name"),
   date: text("date").notNull(), // YYYY-MM for monthly, YYYY for yearly
+  year: integer("year"),
+  month: integer("month"),
   periodType: text("period_type").notNull().default("monthly"), // daily | monthly | yearly
   baseTemperatureHeating: real("base_temperature_heating").notNull().default(18),
   baseTemperatureCooling: real("base_temperature_cooling").notNull().default(22),
@@ -367,6 +371,11 @@ export const weatherDegreeDaysTable = pgTable("weather_degree_days", {
   cdd: real("cdd").notNull().default(0),
   avgTemperature: real("avg_temperature"),
   source: text("source").notNull().default("mgm"),
+  sourceUrl: text("source_url"),
+  isOfficial: boolean("is_official").notNull().default(false),
+  dataMethod: text("data_method").notNull().default("calculated_daily"), // official_monthly | calculated_daily | fallback
+  stationNote: text("station_note"),
+  importedAt: timestamp("imported_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

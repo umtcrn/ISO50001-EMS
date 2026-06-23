@@ -109,12 +109,18 @@ interface WeatherDegreeDay {
   id: number;
   province: string;
   district: string | null;
+  stationName: string | null;
   date: string;
+  year: number | null;
+  month: number | null;
   periodType: string;
   hdd: number;
   cdd: number;
   avgTemperature: number | null;
   source: string;
+  isOfficial: boolean;
+  dataMethod: string;
+  stationNote: string | null;
 }
 
 interface SubUnit { id: number; name: string; }
@@ -853,12 +859,12 @@ function ClimateTab() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border text-muted-foreground">
-                  <th className="text-left px-4 py-3">İl / İlçe</th>
+                  <th className="text-left px-4 py-3">İl / İstasyon</th>
                   <th className="text-left px-4 py-3">Dönem</th>
                   <th className="text-right px-4 py-3">HDD</th>
                   <th className="text-right px-4 py-3">CDD</th>
                   <th className="text-right px-4 py-3">Ort. Sıcaklık</th>
-                  <th className="text-left px-4 py-3">Kaynak</th>
+                  <th className="text-left px-4 py-3">Veri Yöntemi</th>
                 </tr>
               </thead>
               <tbody>
@@ -879,8 +885,14 @@ function ClimateTab() {
                 {(climateData ?? []).map(d => (
                   <tr key={d.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
                     <td className="px-4 py-3">
-                      <div className="font-medium">{d.province}</div>
-                      {d.district && <div className="text-xs text-muted-foreground">{d.district}</div>}
+                      <div className="font-medium flex items-center gap-1.5">
+                        {d.province}
+                        {d.isOfficial && (
+                          <Badge variant="outline" className="text-[10px] py-0 px-1.5 border-emerald-600 text-emerald-400">Resmi</Badge>
+                        )}
+                      </div>
+                      {d.stationName && <div className="text-xs text-muted-foreground">{d.stationName}</div>}
+                      {!d.stationName && d.district && <div className="text-xs text-muted-foreground">{d.district}</div>}
                     </td>
                     <td className="px-4 py-3 text-muted-foreground text-xs">{d.date}</td>
                     <td className="px-4 py-3 text-right font-mono text-blue-400">{d.hdd.toFixed(1)}</td>
@@ -888,7 +900,17 @@ function ClimateTab() {
                     <td className="px-4 py-3 text-right text-muted-foreground">
                       {d.avgTemperature != null ? `${d.avgTemperature.toFixed(1)}°C` : "—"}
                     </td>
-                    <td className="px-4 py-3 text-xs text-muted-foreground uppercase">{d.source}</td>
+                    <td className="px-4 py-3 text-xs">
+                      {d.dataMethod === "official_monthly" && (
+                        <span className="text-emerald-400">Resmi Aylık MGM</span>
+                      )}
+                      {d.dataMethod === "calculated_daily" && (
+                        <span className="text-teal-400">Günlük Hesaplamalı</span>
+                      )}
+                      {d.dataMethod !== "official_monthly" && d.dataMethod !== "calculated_daily" && (
+                        <span className="text-muted-foreground uppercase">{d.dataMethod}</span>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>

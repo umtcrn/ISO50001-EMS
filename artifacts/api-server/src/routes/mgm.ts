@@ -2,7 +2,7 @@ import { Router } from "express";
 import { db, mgmStationsTable, mgmDegreeDataTable, mgmSyncLogTable } from "@workspace/db";
 import { desc, eq, and } from "drizzle-orm";
 import { requireAuth, requireAdmin } from "../middlewares/auth.js";
-import { syncCurrentMonthData, lookupDegreeData } from "../services/mgm-sync.js";
+import { syncCurrentMonthData, lookupDegreeData, lookupOfficialWeatherDegreeDay } from "../services/mgm-sync.js";
 import { MGM_STATIONS, findStationByCity, findStationByIlIlce, parseIlIlce, findNearestStation, haversineDistance } from "../services/mgm-stations-data.js";
 
 const router = Router();
@@ -71,7 +71,29 @@ router.get("/mgm/lookup", requireAuth, async (req, res) => {
       return;
     }
 
-    // DB'den veri al
+    // 1. Önce resmi MGM aylık veriyi kontrol et
+    const { il } = parseIlIlce(city ? city as string : "");
+    const officialData = city
+      ? await lookupOfficialWeatherDegreeDay(il, yr, mo)
+      : null;
+
+    if (officialData) {
+      res.json({
+        stationCode: targetCode,
+        stationName: officialData.stationName ?? stationName,
+        year: yr,
+        month: mo,
+        hdd: officialData.hdd,
+        cdd: officialData.cdd,
+        usedNearest,
+        nearestKm,
+        note: officialData.stationNote ?? note,
+        dataMethod: "official_monthly",
+      });
+      return;
+    }
+
+    // 2. Resmi veri yoksa Open-Meteo havuzundan
     const data = await lookupDegreeData(targetCode!, yr, mo);
     if (!data) {
       res.status(404).json({ error: "Bu dönem için MGM verisi bulunamadı" });
@@ -88,6 +110,7 @@ router.get("/mgm/lookup", requireAuth, async (req, res) => {
       usedNearest,
       nearestKm,
       note,
+      dataMethod: "calculated_daily",
     });
   } catch (err) {
     req.log.error(err);

@@ -1,14 +1,16 @@
-import { db, mgmStationsTable, mgmDegreeDataTable, mgmSyncLogTable } from "@workspace/db";
+import { db, mgmStationsTable, mgmDegreeDataTable, mgmSyncLogTable, weatherDegreeDaysTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { MGM_STATIONS, type StationSeed } from "./mgm-stations-data.js";
 
 // ── MGM Resmi Baz Sıcaklıkları ─────────────────────────────────────
-// HDD: T ≤ 15°C eşiği   CDD: T > 22°C eşiği
-const HDD_BASE = 15;
+// HDD: Tm ≤ 15°C eşiği → HDD = 18 - Tm  (eşik: 15, baz: 18)
+// CDD: Tm > 22°C eşiği → CDD = Tm - 22
+const HDD_BASE_THRESHOLD = 15; // Isıtma sezonuna giriş eşiği
+const HDD_BASE_TEMP = 18;      // Referans sıcaklık (MGM resmi metodoloji)
 const CDD_BASE = 22;
 
 // Veri kaynağı versiyonu — değiştiğinde DB yeniden seed edilir
-const DATA_VERSION = "v6_openmeteo_filter_fixed";
+const DATA_VERSION = "v7_correct_hdd_18base";
 
 // ── Open-Meteo Archive API ─────────────────────────────────────────
 const OPEN_METEO_URL = "https://archive-api.open-meteo.com/v1/archive";
@@ -39,7 +41,6 @@ async function fetchOpenMeteoMonthly(
   let lastError: Error | null = null;
   for (let attempt = 0; attempt < retries; attempt++) {
     if (attempt > 0) {
-      // Exponential backoff: 2s, 4s, 8s
       await new Promise(r => setTimeout(r, 2000 * Math.pow(2, attempt - 1)));
     }
     const res = await fetch(`${OPEN_METEO_URL}?${params}`, {
@@ -51,7 +52,6 @@ async function fetchOpenMeteoMonthly(
       continue;
     }
     if (!res.ok) throw new Error(`Open-Meteo HTTP ${res.status}`);
-    // Success — continue to parse below
     const data = (await res.json()) as {
       daily: { time: string[]; temperature_2m_max: number[]; temperature_2m_min: number[] };
     };
@@ -66,7 +66,8 @@ async function fetchOpenMeteoMonthly(
       if (!monthly.has(key)) monthly.set(key, { hdd: 0, cdd: 0, days: 0 });
       const entry = monthly.get(key)!;
       const tmean = (tmax[i] + tmin[i]) / 2;
-      entry.hdd += Math.max(HDD_BASE - tmean, 0);
+      // MGM resmi metodoloji: eşik 15°C, baz sıcaklık 18°C
+      entry.hdd += tmean <= HDD_BASE_THRESHOLD ? (HDD_BASE_TEMP - tmean) : 0;
       entry.cdd += Math.max(tmean - CDD_BASE, 0);
       entry.days++;
     }
@@ -117,7 +118,8 @@ function syntheticHddCdd(
   const actualMeanTemp = climateMean + warmingOffset + variability;
   const sigma = stationSigma(station, month);
 
-  const dH = HDD_BASE - actualMeanTemp;
+  // Sentetik hesapta da aynı eşik/baz kullan
+  const dH = HDD_BASE_TEMP - actualMeanTemp;
   const hdd = Math.max(0, Math.round((dH * normalCDF(dH / sigma) + sigma * normalPDF(dH / sigma)) * days * 10) / 10);
   const dC = actualMeanTemp - CDD_BASE;
   const cdd = Math.max(0, Math.round((dC * normalCDF(dC / sigma) + sigma * normalPDF(dC / sigma)) * days * 10) / 10);
@@ -174,10 +176,9 @@ export async function seedDegreeDataIfEmpty(): Promise<void> {
   const isCurrent = await isDataVersionCurrent();
   if (isCurrent) return;
 
-  // Eski veri varsa temizle
   const existing = await db.select({ id: mgmDegreeDataTable.id }).from(mgmDegreeDataTable).limit(1);
   if (existing.length > 0) {
-    console.log("[MGM] Eski veri temizleniyor (Open-Meteo gerçek veri ile değiştiriliyor)...");
+    console.log("[MGM] Eski veri temizleniyor (doğru HDD formülü ile yeniden hesaplanıyor)...");
     await db.delete(mgmDegreeDataTable);
   }
 
@@ -199,7 +200,6 @@ export async function seedDegreeDataIfEmpty(): Promise<void> {
   let apiSuccess = 0;
   let apiFallback = 0;
 
-  // Sıralı istekler (rate limit'i aşmamak için)
   for (let i = 0; i < MGM_STATIONS.length; i++) {
     const station = MGM_STATIONS[i];
     let monthly: MonthlyDegreeDay[];
@@ -210,7 +210,6 @@ export async function seedDegreeDataIfEmpty(): Promise<void> {
       source = "api";
       apiSuccess++;
     } catch {
-      // API başarısız → sentetik hesap
       monthly = [];
       for (let y = startYear; y <= currentYear; y++) {
         const maxM = y === currentYear ? now.getMonth() : 12;
@@ -234,7 +233,6 @@ export async function seedDegreeDataIfEmpty(): Promise<void> {
       console.log(`[MGM] ${i + 1}/${MGM_STATIONS.length} istasyon işlendi (${totalInserted} kayıt, ${apiSuccess} API, ${apiFallback} sentetik)...`);
     }
 
-    // Open-Meteo rate limit: istasyonlar arası bekleme
     if (i < MGM_STATIONS.length - 1) {
       await new Promise(r => setTimeout(r, source === "api" ? 600 : 50));
     }
@@ -270,7 +268,6 @@ export async function syncCurrentMonthData(): Promise<{ synced: number; errors: 
   }).returning();
   const logId = logEntry[0].id;
 
-  // Önceki ay başından bugüne kadar veri çek
   const fetchStart = `${prevYear}-${String(prevMonth).padStart(2, "0")}-01`;
   const fetchEnd = `${currentYear}-${String(currentMonth).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 
@@ -284,7 +281,6 @@ export async function syncCurrentMonthData(): Promise<{ synced: number; errors: 
           const monthly = await fetchOpenMeteoMonthly(station.lat, station.lon, fetchStart, fetchEnd);
           return { station, monthly };
         } catch {
-          // Fallback sentetik
           const monthly: MonthlyDegreeDay[] = [];
           for (const { year, month } of [{ year: prevYear, month: prevMonth }, { year: currentYear, month: currentMonth }]) {
             const days = daysInMonth(month, year);
@@ -343,7 +339,7 @@ export async function syncCurrentMonthData(): Promise<{ synced: number; errors: 
   return { synced, errors };
 }
 
-// ── HDD/CDD lookup ─────────────────────────────────────────────────
+// ── HDD/CDD lookup (Open-Meteo havuzundan) ──────────────────────────
 export async function lookupDegreeData(
   stationCode: string,
   year: number,
@@ -360,6 +356,82 @@ export async function lookupDegreeData(
   return rows.length > 0 ? rows[0] : null;
 }
 
+// ── Resmi MGM aylık veri lookup (weather_degree_days) ─────────────
+export async function lookupOfficialWeatherDegreeDay(
+  province: string,
+  year: number,
+  month: number
+): Promise<{ hdd: number; cdd: number; stationName: string | null; stationNote: string | null } | null> {
+  const rows = await db
+    .select({
+      hdd: weatherDegreeDaysTable.hdd,
+      cdd: weatherDegreeDaysTable.cdd,
+      stationName: weatherDegreeDaysTable.stationName,
+      stationNote: weatherDegreeDaysTable.stationNote,
+    })
+    .from(weatherDegreeDaysTable)
+    .where(and(
+      eq(weatherDegreeDaysTable.province, province),
+      eq(weatherDegreeDaysTable.year, year),
+      eq(weatherDegreeDaysTable.month, month),
+      eq(weatherDegreeDaysTable.isOfficial, true),
+      eq(weatherDegreeDaysTable.periodType, "monthly"),
+    ))
+    .limit(1);
+  return rows.length > 0 ? rows[0] : null;
+}
+
+// ── Resmi MGM aylık veri seed (Van 2024 demo/test) ────────────────
+export async function seedOfficialWeatherData(): Promise<void> {
+  const officialData = [
+    { province: "Van", district: null as string | null, stationName: "Van MGM", year: 2024, month: 1, hdd: 528, cdd: 0 },
+    { province: "Van", district: null as string | null, stationName: "Van MGM", year: 2024, month: 2, hdd: 498, cdd: 0 },
+  ];
+
+  let seeded = 0;
+  for (const d of officialData) {
+    const existing = await db
+      .select({ id: weatherDegreeDaysTable.id })
+      .from(weatherDegreeDaysTable)
+      .where(and(
+        eq(weatherDegreeDaysTable.province, d.province),
+        eq(weatherDegreeDaysTable.year, d.year),
+        eq(weatherDegreeDaysTable.month, d.month),
+        eq(weatherDegreeDaysTable.isOfficial, true),
+      ))
+      .limit(1);
+
+    if (existing.length > 0) continue;
+
+    const date = `${d.year}-${String(d.month).padStart(2, "0")}`;
+    await db.insert(weatherDegreeDaysTable).values({
+      companyId: null,
+      province: d.province,
+      district: d.district,
+      stationCode: null,
+      stationName: d.stationName,
+      date,
+      year: d.year,
+      month: d.month,
+      periodType: "monthly",
+      baseTemperatureHeating: 18,
+      baseTemperatureCooling: 22,
+      hdd: d.hdd,
+      cdd: d.cdd,
+      avgTemperature: null,
+      source: "MGM",
+      isOfficial: true,
+      dataMethod: "official_monthly",
+      stationNote: null,
+      importedAt: new Date(),
+    });
+    seeded++;
+  }
+  if (seeded > 0) {
+    console.log(`[MGM] Resmi aylık veri seed tamamlandı: ${seeded} kayıt (Van 2024 Ocak/Şubat).`);
+  }
+}
+
 // ── Daily scheduler ────────────────────────────────────────────────
 let schedulerStarted = false;
 
@@ -373,7 +445,6 @@ export function startMgmDailyScheduler(): void {
     console.log(`[MGM] Günlük sync tamamlandı: ${result.synced} güncellendi, ${result.errors} hata.`);
   };
 
-  // Server hazır olduktan 2 dakika sonra başlat (seed tamamlandıktan sonra)
   setTimeout(() => {
     runSync().catch(err => console.error("[MGM] Scheduler hatası:", err));
   }, 2 * 60 * 1000);
@@ -382,5 +453,5 @@ export function startMgmDailyScheduler(): void {
     runSync().catch(err => console.error("[MGM] Scheduler hatası:", err));
   }, 24 * 60 * 60 * 1000);
 
-  console.log("[MGM] Günlük scheduler başlatıldı (Open-Meteo tabanlı).");
+  console.log("[MGM] Günlük scheduler başlatıldı (Open-Meteo tabanlı, HDD baz 18°C).");
 }

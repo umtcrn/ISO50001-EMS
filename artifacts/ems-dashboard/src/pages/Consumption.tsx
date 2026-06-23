@@ -70,7 +70,7 @@ export default function Consumption() {
   const [formEnergySource, setFormEnergySource] = useState("");
   const [formSubUnit, setFormSubUnit] = useState("");
   const [hddFetching, setHddFetching] = useState(false);
-  const [mgmStation, setMgmStation] = useState<{ name: string; note: string | null } | null>(null);
+  const [mgmStation, setMgmStation] = useState<{ name: string; note: string | null; dataMethod?: string } | null>(null);
 
   const { unitId } = useUnit();
   const isAdmin = user?.role === "admin" || user?.role === "superadmin";
@@ -174,7 +174,7 @@ export default function Consumption() {
       if (res.ok) {
         const data = await res.json();
         setForm(f => ({ ...f, hdd: data.hdd?.toString() ?? "", cdd: data.cdd?.toString() ?? "" }));
-        setMgmStation({ name: data.stationName, note: data.note ?? null });
+        setMgmStation({ name: data.stationName, note: data.note ?? null, dataMethod: data.dataMethod ?? undefined });
       }
     } catch {}
     setHddFetching(false);
@@ -625,10 +625,16 @@ export default function Consumption() {
               <div className="space-y-1.5">
                 {mgmStation ? (
                   <div className="rounded-md border border-border/50 bg-muted/30 px-3 py-2 space-y-1">
-                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground flex-wrap">
                       <MapPin className="h-3 w-3 shrink-0 text-emerald-400" />
                       <span className="font-medium text-foreground/80">MGM İstasyonu:</span>
                       <span>{mgmStation.name}</span>
+                      {mgmStation.dataMethod === "official_monthly" && (
+                        <Badge variant="outline" className="text-[10px] py-0 px-1.5 border-emerald-600 text-emerald-400 ml-1">Resmi Aylık</Badge>
+                      )}
+                      {mgmStation.dataMethod === "calculated_daily" && (
+                        <Badge variant="outline" className="text-[10px] py-0 px-1.5 border-teal-600 text-teal-400 ml-1">Günlük Hesaplamalı</Badge>
+                      )}
                     </div>
                     {mgmStation.note && (
                       <div className="flex items-start gap-1.5 text-xs text-amber-400/90">

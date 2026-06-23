@@ -3,7 +3,7 @@ import { db, consumptionTable, metersTable, subUnitsTable, energyUseGroupsTable 
 import { eq, and, ne, sql } from "drizzle-orm";
 import { requireAuth } from "../middlewares/auth.js";
 import { findStationByIlIlce, parseIlIlce, findNearestStation } from "../services/mgm-stations-data.js";
-import { lookupDegreeData } from "../services/mgm-sync.js";
+import { lookupDegreeData, lookupOfficialWeatherDegreeDay } from "../services/mgm-sync.js";
 
 const router = Router();
 
@@ -13,13 +13,31 @@ interface MgmLookupResult {
   cdd: number;
   stationName: string;
   stationNote: string | null;
+  dataMethod: "official_monthly" | "calculated_daily" | "fallback";
 }
 
 async function autoLookupHddCdd(location: string, year: number, month: number): Promise<MgmLookupResult | null> {
   try {
     const { il, ilce } = parseIlIlce(location);
-    const lookup = findStationByIlIlce(il, ilce);
 
+    // 1. Önce resmi MGM aylık veriyi kontrol et (weather_degree_days, is_official=true)
+    const official = await lookupOfficialWeatherDegreeDay(il, year, month);
+    if (official) {
+      const lookup = findStationByIlIlce(il, ilce);
+      const fallbackNote = lookup?.isFallback && ilce
+        ? `"${location}" için birebir MGM istasyonu bulunamadı. ${il} iline ait resmi veri kullanıldı.`
+        : null;
+      return {
+        hdd: official.hdd,
+        cdd: official.cdd,
+        stationName: official.stationName ?? il,
+        stationNote: official.stationNote ?? fallbackNote,
+        dataMethod: "official_monthly",
+      };
+    }
+
+    // 2. Resmi veri yoksa → MGM Open-Meteo havuzundan (günlük veriden hesaplanmış)
+    const lookup = findStationByIlIlce(il, ilce);
     if (lookup) {
       const { station, isFallback } = lookup;
       const data = await lookupDegreeData(station.stationCode, year, month);
@@ -27,11 +45,11 @@ async function autoLookupHddCdd(location: string, year: number, month: number): 
         const stationNote = isFallback
           ? `"${location}" için birebir MGM istasyonu bulunamadı. ${il} iline ait "${station.name}" istasyonu kullanıldı.`
           : null;
-        return { hdd: data.hdd, cdd: data.cdd, stationName: station.name, stationNote };
+        return { hdd: data.hdd, cdd: data.cdd, stationName: station.name, stationNote, dataMethod: "calculated_daily" };
       }
     }
 
-    // İl de bulunamadı → coğrafi merkez fallback
+    // 3. İl de bulunamadı → coğrafi merkez fallback
     const nearest = findNearestStation(39.0, 35.0);
     const data = await lookupDegreeData(nearest.stationCode, year, month);
     if (data) {
@@ -40,6 +58,7 @@ async function autoLookupHddCdd(location: string, year: number, month: number): 
         cdd: data.cdd,
         stationName: nearest.name,
         stationNote: `"${location}" için MGM istasyonu bulunamadı. En yakın varsayılan istasyon "${nearest.name}" kullanıldı.`,
+        dataMethod: "fallback",
       };
     }
 
@@ -184,6 +203,7 @@ router.post("/consumption", requireAuth, async (req, res) => {
       meterName: meter.name,
       weatherStationName,
       weatherStationNote,
+      weatherDataMethod: mgmResult?.dataMethod ?? null,
     });
   } catch (err) {
     req.log.error(err);
