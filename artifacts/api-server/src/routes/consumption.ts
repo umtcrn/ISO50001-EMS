@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db, consumptionTable, metersTable, subUnitsTable, energyUseGroupsTable } from "@workspace/db";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, ne, sql } from "drizzle-orm";
 import { requireAuth } from "../middlewares/auth.js";
 import { findStationByIlIlce, parseIlIlce, findNearestStation } from "../services/mgm-stations-data.js";
 import { lookupDegreeData } from "../services/mgm-sync.js";
@@ -125,6 +125,20 @@ router.post("/consumption", requireAuth, async (req, res) => {
     const yr = parseInt(year);
     const mo = parseInt(month);
 
+    // Dönem bazlı duplicate kontrolü
+    const [dupCheck] = await db
+      .select({ id: consumptionTable.id })
+      .from(consumptionTable)
+      .where(and(
+        eq(consumptionTable.companyId, meter.companyId),
+        eq(consumptionTable.meterId, meter.id),
+        eq(consumptionTable.year, yr),
+        eq(consumptionTable.month, mo)
+      ));
+    if (dupCheck) {
+      res.status(409).json({ error: `Bu sayaç ve dönem (${yr}/${mo}) için kayıt zaten mevcut` }); return;
+    }
+
     // HDD/CDD: kullanıcı manuel girdiyse kullan, yoksa MGM havuzundan otomatik çek
     let hddVal: number | null = null;
     let cddVal: number | null = null;
@@ -184,7 +198,14 @@ router.patch("/consumption/:id", requireAuth, async (req, res) => {
     const id = parseInt(req.params.id as string);
 
     const [existing] = await db
-      .select({ companyId: consumptionTable.companyId, meterUnitId: metersTable.unitId, meterCompanyId: metersTable.companyId })
+      .select({
+        companyId: consumptionTable.companyId,
+        meterId: consumptionTable.meterId,
+        year: consumptionTable.year,
+        month: consumptionTable.month,
+        meterUnitId: metersTable.unitId,
+        meterCompanyId: metersTable.companyId,
+      })
       .from(consumptionTable)
       .leftJoin(metersTable, eq(consumptionTable.meterId, metersTable.id))
       .where(eq(consumptionTable.id, id));
@@ -197,6 +218,23 @@ router.patch("/consumption/:id", requireAuth, async (req, res) => {
     }
 
     const { kwh, tep, co2, hdd, cdd, notes } = req.body;
+
+    // Dönem bazlı duplicate kontrolü (kendi kaydı hariç)
+    if (existing.meterId && existing.year && existing.month) {
+      const [dupCheck] = await db
+        .select({ id: consumptionTable.id })
+        .from(consumptionTable)
+        .where(and(
+          eq(consumptionTable.companyId, existing.companyId!),
+          eq(consumptionTable.meterId, existing.meterId),
+          eq(consumptionTable.year, existing.year),
+          eq(consumptionTable.month, existing.month),
+          ne(consumptionTable.id, id)
+        ));
+      if (dupCheck) {
+        res.status(409).json({ error: `Bu sayaç ve dönem (${existing.year}/${existing.month}) için başka bir kayıt zaten mevcut` }); return;
+      }
+    }
     const updates: Record<string, unknown> = {};
     if (kwh !== undefined) updates.kwh = parseFloat(kwh);
     if (tep !== undefined) updates.tep = parseFloat(tep);
@@ -267,6 +305,21 @@ router.post("/consumption/batch", requireAuth, async (req, res) => {
             hddVal = mgmResult.hdd;
             cddVal = mgmResult.cdd;
           }
+        }
+
+        // Dönem bazlı duplicate kontrolü (batch)
+        const [batchDup] = await db
+          .select({ id: consumptionTable.id })
+          .from(consumptionTable)
+          .where(and(
+            eq(consumptionTable.companyId, meter.companyId),
+            eq(consumptionTable.meterId, meter.id),
+            eq(consumptionTable.year, year),
+            eq(consumptionTable.month, month)
+          ));
+        if (batchDup) {
+          errors.push({ row: rowNum, message: `Sayaç "${meter.name}" için ${year}/${month} kaydı zaten mevcut (atlandı)` });
+          continue;
         }
 
         await db.execute(sql`

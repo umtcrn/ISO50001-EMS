@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db, variablesTable, variableValuesTable, weatherDegreeDaysTable, companiesTable, unitsTable, subUnitsTable, metersTable, mgmStationsTable, mgmDegreeDataTable } from "@workspace/db";
-import { eq, and, inArray, sql } from "drizzle-orm";
+import { eq, and, ne, isNull, inArray, sql } from "drizzle-orm";
 import { requireAuth, requireAdmin } from "../middlewares/auth.js";
 
 const router = Router();
@@ -191,6 +191,17 @@ router.post("/variable-values", requireAuth, async (req, res) => {
       res.status(400).json({ error: "Zorunlu alanlar eksik" }); return;
     }
 
+    // Sayısal değer doğrulama
+    const numericValue = parseFloat(value);
+    if (isNaN(numericValue)) {
+      res.status(400).json({ error: "Değer sayısal olmalıdır" }); return;
+    }
+
+    // Dönem sıralaması doğrulama
+    if (periodStart > periodEnd) {
+      res.status(400).json({ error: "Dönem başlangıcı, dönem bitişinden büyük olamaz" }); return;
+    }
+
     const [variable] = await db.select().from(variablesTable).where(eq(variablesTable.id, parseInt(variableId)));
     if (!variable) { res.status(400).json({ error: "Değişken bulunamadı" }); return; }
 
@@ -215,6 +226,24 @@ router.post("/variable-values", requireAuth, async (req, res) => {
     }
     if (scope === "meter" && (!hasUnit || !hasSub || !hasMeter)) {
       res.status(400).json({ error: "Sayaç kapsamlı değişkende birim, alt birim ve sayaç seçimi zorunludur" }); return;
+    }
+
+    // Dönem bazlı duplicate kontrolü
+    const dupConditions = [
+      eq(variableValuesTable.companyId, targetCompanyId),
+      eq(variableValuesTable.variableId, parseInt(variableId)),
+      eq(variableValuesTable.periodStart, periodStart),
+      eq(variableValuesTable.periodEnd, periodEnd),
+      unitId   ? eq(variableValuesTable.unitId,    parseInt(unitId))    : isNull(variableValuesTable.unitId),
+      subUnitId ? eq(variableValuesTable.subUnitId, parseInt(subUnitId)) : isNull(variableValuesTable.subUnitId),
+      meterId  ? eq(variableValuesTable.meterId,   parseInt(meterId))   : isNull(variableValuesTable.meterId),
+    ];
+    const [dupVal] = await db
+      .select({ id: variableValuesTable.id })
+      .from(variableValuesTable)
+      .where(and(...dupConditions));
+    if (dupVal) {
+      res.status(409).json({ error: "Bu kapsam ve dönem için değer zaten mevcut" }); return;
     }
 
     const [record] = await db.insert(variableValuesTable).values({
@@ -255,11 +284,25 @@ router.put("/variable-values/:id", requireAuth, async (req, res) => {
 
     const { periodStart, periodEnd, periodType, value, source, locationProvince, locationDistrict, dataQuality, unitId, subUnitId, meterId } = req.body;
 
+    // Sayısal değer doğrulama
+    if (value !== undefined) {
+      const numericValue = parseFloat(value);
+      if (isNaN(numericValue)) {
+        res.status(400).json({ error: "Değer sayısal olmalıdır" }); return;
+      }
+    }
+
+    // Dönem sıralaması doğrulama
+    const effectivePeriodStart = periodStart !== undefined ? periodStart : existing.periodStart;
+    const effectivePeriodEnd   = periodEnd   !== undefined ? periodEnd   : existing.periodEnd;
+    if (effectivePeriodStart > effectivePeriodEnd) {
+      res.status(400).json({ error: "Dönem başlangıcı, dönem bitişinden büyük olamaz" }); return;
+    }
+
     // Kapsam doğrulama (değişkenin scopeType'ına göre)
     const [varForScope] = await db.select().from(variablesTable).where(eq(variablesTable.id, existing.variableId));
     if (varForScope) {
       const scope = varForScope.scopeType;
-      // Eğer istek scope alanlarını göndermiyorsa mevcut DB değerlerini kullan
       const effectiveUnitId   = unitId   !== undefined ? (unitId   || null) : existing.unitId;
       const effectiveSubId    = subUnitId !== undefined ? (subUnitId || null) : existing.subUnitId;
       const effectiveMeterId  = meterId  !== undefined ? (meterId  || null) : existing.meterId;
@@ -275,6 +318,28 @@ router.put("/variable-values/:id", requireAuth, async (req, res) => {
       }
       if (scope === "meter" && (!effectiveUnitId || !effectiveSubId || !effectiveMeterId)) {
         res.status(400).json({ error: "Sayaç kapsamlı değişkende birim, alt birim ve sayaç seçimi zorunludur" }); return;
+      }
+
+      // Dönem bazlı duplicate kontrolü (kendi kaydı hariç)
+      const effUnitId   = unitId   !== undefined ? (unitId   || null) : existing.unitId;
+      const effSubId    = subUnitId !== undefined ? (subUnitId || null) : existing.subUnitId;
+      const effMeterId  = meterId  !== undefined ? (meterId  || null) : existing.meterId;
+      const putDupConditions = [
+        eq(variableValuesTable.companyId, existing.companyId),
+        eq(variableValuesTable.variableId, existing.variableId),
+        eq(variableValuesTable.periodStart, effectivePeriodStart),
+        eq(variableValuesTable.periodEnd, effectivePeriodEnd),
+        effUnitId  ? eq(variableValuesTable.unitId,    effUnitId)  : isNull(variableValuesTable.unitId),
+        effSubId   ? eq(variableValuesTable.subUnitId, effSubId)   : isNull(variableValuesTable.subUnitId),
+        effMeterId ? eq(variableValuesTable.meterId,   effMeterId) : isNull(variableValuesTable.meterId),
+        ne(variableValuesTable.id, id),
+      ];
+      const [putDupVal] = await db
+        .select({ id: variableValuesTable.id })
+        .from(variableValuesTable)
+        .where(and(...putDupConditions));
+      if (putDupVal) {
+        res.status(409).json({ error: "Bu kapsam ve dönem için değer zaten mevcut" }); return;
       }
     }
 
