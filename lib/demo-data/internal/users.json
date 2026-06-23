@@ -1,0 +1,18 @@
+[
+  {
+    "username": "kontrol_admin",
+    "name": "Kontrol Yöneticisi",
+    "role": "admin",
+    "unitKey": null,
+    "active": true,
+    "isDemo": false
+  },
+  {
+    "username": "17bm",
+    "name": "17bm",
+    "role": "user",
+    "unitKey": "17-bolge-mudurlugu",
+    "active": true,
+    "isDemo": false
+  }
+]

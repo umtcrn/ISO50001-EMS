@@ -1,0 +1,42 @@
+[
+  {
+    "subUnitKey": "17-bolge-mudurlugu--tatvan-isletme-ve-bakim-grup-basmuhendisligi",
+    "unitKey": "17-bolge-mudurlugu",
+    "name": "TATVAN İŞLETME VE BAKIM GRUP BAŞMÜHENDİSLİĞİ",
+    "city": "Tatvan, Bitlis",
+    "description": null,
+    "active": true
+  },
+  {
+    "subUnitKey": "17-bolge-mudurlugu--agri-isletme-ve-bakim-grup-basmuhendisligi",
+    "unitKey": "17-bolge-mudurlugu",
+    "name": "AĞRI İŞLETME VE BAKIM GRUP BAŞMÜHENDİSLİĞİ",
+    "city": "Ağrı Merkez, Ağrı",
+    "description": null,
+    "active": true
+  },
+  {
+    "subUnitKey": "17-bolge-mudurlugu--igdir-isletme-ve-bakim-grup-basmuhendisligi",
+    "unitKey": "17-bolge-mudurlugu",
+    "name": "IĞDIR İŞLETME VE BAKIM GRUP BAŞMÜHENDİSLİĞİ",
+    "city": "Iğdır Merkez, Iğdır",
+    "description": null,
+    "active": true
+  },
+  {
+    "subUnitKey": "17-bolge-mudurlugu--bolge-mudurlugu-kampusu",
+    "unitKey": "17-bolge-mudurlugu",
+    "name": "Bölge Müdürlüğü Kampüsü",
+    "city": "Edremit, Van",
+    "description": null,
+    "active": true
+  },
+  {
+    "subUnitKey": "17-bolge-mudurlugu--engil-sosyal-tesisleri",
+    "unitKey": "17-bolge-mudurlugu",
+    "name": "Engil Sosyal Tesisleri",
+    "city": "Edremit, Van",
+    "description": null,
+    "active": true
+  }
+]

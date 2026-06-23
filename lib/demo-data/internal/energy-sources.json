@@ -1,0 +1,50 @@
+[
+  {
+    "energySourceKey": "17-bolge-mudurlugu--elektrik",
+    "unitKey": "17-bolge-mudurlugu",
+    "type": "elektrik",
+    "name": "Elektrik",
+    "unit": "kWh",
+    "active": true
+  },
+  {
+    "energySourceKey": "17-bolge-mudurlugu--dogalgaz",
+    "unitKey": "17-bolge-mudurlugu",
+    "type": "dogalgaz",
+    "name": "Doğalgaz",
+    "unit": "m3",
+    "active": true
+  },
+  {
+    "energySourceKey": "17-bolge-mudurlugu--fuel-oil",
+    "unitKey": "17-bolge-mudurlugu",
+    "type": "diger",
+    "name": "Fuel Oil",
+    "unit": "ton",
+    "active": true
+  },
+  {
+    "energySourceKey": "17-bolge-mudurlugu--komur",
+    "unitKey": "17-bolge-mudurlugu",
+    "type": "diger",
+    "name": "Kömür",
+    "unit": "ton",
+    "active": true
+  },
+  {
+    "energySourceKey": "17-bolge-mudurlugu--motorin",
+    "unitKey": "17-bolge-mudurlugu",
+    "type": "diger",
+    "name": "Motorin",
+    "unit": "litre",
+    "active": true
+  },
+  {
+    "energySourceKey": "17-bolge-mudurlugu--benzin",
+    "unitKey": "17-bolge-mudurlugu",
+    "type": "diger",
+    "name": "Benzin",
+    "unit": "litre",
+    "active": true
+  }
+]

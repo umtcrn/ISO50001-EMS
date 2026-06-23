@@ -1,0 +1,13 @@
+[
+  {
+    "unitKey": "17-bolge-mudurlugu",
+    "name": "17.Bölge Müdürlüğü",
+    "location": "Süphan Mah. İpekyolu Bulvarı No:369",
+    "type": "diger",
+    "city": "Edremit, Van",
+    "responsible": null,
+    "description": null,
+    "active": true,
+    "isDemo": false
+  }
+]
