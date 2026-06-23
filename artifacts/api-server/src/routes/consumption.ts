@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db, consumptionTable, metersTable, subUnitsTable, energyUseGroupsTable } from "@workspace/db";
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { requireAuth } from "../middlewares/auth.js";
 import { findStationByIlIlce, parseIlIlce, findNearestStation } from "../services/mgm-stations-data.js";
 import { lookupDegreeData } from "../services/mgm-sync.js";
@@ -76,8 +76,6 @@ router.get("/consumption", requireAuth, async (req, res) => {
         hdd: consumptionTable.hdd,
         cdd: consumptionTable.cdd,
         notes: consumptionTable.notes,
-        weatherStationName: consumptionTable.weatherStationName,
-        weatherStationNote: consumptionTable.weatherStationNote,
         createdAt: consumptionTable.createdAt,
       })
       .from(consumptionTable)
@@ -151,20 +149,21 @@ router.post("/consumption", requireAuth, async (req, res) => {
       }
     }
 
-    const [record] = await db.insert(consumptionTable).values({
-      meterId: meter.id,
-      companyId: meter.companyId,
-      year: yr,
-      month: mo,
-      kwh: kwhVal,
-      tep: tepVal,
-      co2: co2Val,
-      hdd: hddVal,
-      cdd: cddVal,
-      notes: notes || null,
-      weatherStationName: weatherStationName || null,
-      weatherStationNote: weatherStationNote || null,
-    }).returning();
+    const result = await db.execute(sql`
+      INSERT INTO consumption
+        (company_id, meter_id, year, month, kwh, tep, co2, hdd, cdd, notes)
+      VALUES
+        (${meter.companyId}, ${meter.id}, ${yr}, ${mo},
+         ${kwhVal}, ${tepVal}, ${co2Val},
+         ${hddVal}, ${cddVal}, ${notes || null})
+      RETURNING
+        id,
+        company_id   AS "companyId",
+        meter_id     AS "meterId",
+        year, month, kwh, tep, co2, hdd, cdd, notes,
+        created_at   AS "createdAt"
+    `);
+    const record = result.rows[0] as Record<string, unknown>;
 
     res.status(201).json({
       ...record,
@@ -260,8 +259,6 @@ router.post("/consumption/batch", requireAuth, async (req, res) => {
 
         let hddVal: number | null = row.hdd !== undefined && row.hdd !== "" ? parseFloat(String(row.hdd)) : null;
         let cddVal: number | null = row.cdd !== undefined && row.cdd !== "" ? parseFloat(String(row.cdd)) : null;
-        let weatherStationName: string | null = null;
-        let weatherStationNote: string | null = null;
 
         // Batch'te de HDD/CDD boşsa otomatik çek
         if (hddVal === null && cddVal === null && meter.city) {
@@ -269,25 +266,17 @@ router.post("/consumption/batch", requireAuth, async (req, res) => {
           if (mgmResult) {
             hddVal = mgmResult.hdd;
             cddVal = mgmResult.cdd;
-            weatherStationName = mgmResult.stationName;
-            weatherStationNote = mgmResult.stationNote;
           }
         }
 
-        await db.insert(consumptionTable).values({
-          meterId: meter.id,
-          companyId: meter.companyId,
-          year,
-          month,
-          kwh,
-          tep: tepVal,
-          co2: co2Val,
-          hdd: hddVal,
-          cdd: cddVal,
-          notes: row.notes ? String(row.notes) : null,
-          weatherStationName: weatherStationName || null,
-          weatherStationNote: weatherStationNote || null,
-        });
+        await db.execute(sql`
+          INSERT INTO consumption
+            (company_id, meter_id, year, month, kwh, tep, co2, hdd, cdd, notes)
+          VALUES
+            (${meter.companyId}, ${meter.id}, ${year}, ${month},
+             ${kwh}, ${tepVal}, ${co2Val},
+             ${hddVal}, ${cddVal}, ${row.notes ? String(row.notes) : null})
+        `);
         imported++;
       } catch (rowErr: any) {
         errors.push({ row: rowNum, message: rowErr?.message ?? "Bilinmeyen hata" });
