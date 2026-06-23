@@ -2,6 +2,7 @@ import { Router } from "express";
 import { db, variablesTable, variableValuesTable, weatherDegreeDaysTable, companiesTable, unitsTable, subUnitsTable, metersTable, mgmStationsTable, mgmDegreeDataTable } from "@workspace/db";
 import { eq, and, ne, isNull, inArray, sql } from "drizzle-orm";
 import { requireAuth, requireAdmin } from "../middlewares/auth.js";
+import { parseIlIlce, findStationByIlIlce } from "../services/mgm-stations-data.js";
 
 const router = Router();
 
@@ -421,15 +422,14 @@ router.post("/weather-degree-days/sync", requireAuth, async (req, res) => {
   try {
     const { companyId } = req.user!;
 
-    // 1. Bu şirketin birimlerine bağlı tüm sayaçları ve şehirlerini bul
+    // 1. Bu şirketin birimlerine bağlı tüm sayaç şehirlerini bul
     const unitRows = await db
       .select({ id: unitsTable.id })
       .from(unitsTable)
       .where(eq(unitsTable.companyId, companyId));
 
     if (unitRows.length === 0) {
-      res.json({ synced: 0, provinces: [], message: "Kayıtlı birim bulunamadı" });
-      return;
+      res.json({ synced: 0, provinces: [], message: "Kayıtlı birim bulunamadı" }); return;
     }
 
     const unitIds = unitRows.map(u => u.id);
@@ -440,10 +440,8 @@ router.post("/weather-degree-days/sync", requireAuth, async (req, res) => {
       .where(inArray(subUnitsTable.unitId, unitIds));
 
     const subUnitIds = subUnitRows.map(s => s.id);
-
     if (subUnitIds.length === 0) {
-      res.json({ synced: 0, provinces: [], message: "Kayıtlı alt birim bulunamadı" });
-      return;
+      res.json({ synced: 0, provinces: [], message: "Kayıtlı alt birim bulunamadı" }); return;
     }
 
     const meterRows = await db
@@ -452,24 +450,45 @@ router.post("/weather-degree-days/sync", requireAuth, async (req, res) => {
       .where(inArray(metersTable.subUnitId, subUnitIds));
 
     const cities = [...new Set(meterRows.map(m => m.city.trim()).filter(Boolean))];
-
     if (cities.length === 0) {
-      res.json({ synced: 0, provinces: [], message: "Sayaçlara bağlı şehir bulunamadı" });
-      return;
+      res.json({ synced: 0, provinces: [], message: "Sayaçlara bağlı şehir bulunamadı" }); return;
     }
 
-    // 2. MGM istasyonlarından bu şehirlere uyan istasyonları bul (il bazlı, case-insensitive)
-    const allStations = await db.select().from(mgmStationsTable).where(eq(mgmStationsTable.isActive, true));
+    // 2. Her sayaç şehrini parseIlIlce ile ayrıştır → findStationByIlIlce ile eşleştir
+    //    Önce il + ilçe birebir aranır, yoksa aynı il içinde fallback kullanılır.
+    interface CityMapping {
+      city: string;
+      il: string;
+      stationCode: string;
+      stationName: string;
+      isFallback: boolean;
+      fallbackNote: string | null;
+    }
 
-    // city → stationCode eşleştirmesi (şehir adı normalize edilerek)
-    const normalize = (s: string) =>
-      s.toLocaleLowerCase("tr-TR").replace(/[İ]/g, "i").replace(/[I]/g, "ı").trim();
+    const cityMappings: CityMapping[] = [];
+    const unmatchedCities: string[] = [];
 
-    const matchedStations = allStations.filter(station =>
-      cities.some(city => normalize(city) === normalize(station.il))
-    );
+    for (const city of cities) {
+      const { il, ilce } = parseIlIlce(city);
+      const lookup = findStationByIlIlce(il, ilce);
+      if (!lookup) {
+        unmatchedCities.push(city);
+        continue;
+      }
+      const fallbackNote = lookup.isFallback && ilce
+        ? `"${city}" için birebir MGM istasyonu bulunamadı. ${il} iline ait "${lookup.station.name}" istasyonu kullanıldı.`
+        : null;
+      cityMappings.push({
+        city,
+        il,
+        stationCode: lookup.station.stationCode,
+        stationName: lookup.station.name,
+        isFallback: lookup.isFallback,
+        fallbackNote,
+      });
+    }
 
-    if (matchedStations.length === 0) {
+    if (cityMappings.length === 0) {
       res.json({
         synced: 0,
         provinces: [],
@@ -478,24 +497,29 @@ router.post("/weather-degree-days/sync", requireAuth, async (req, res) => {
       return;
     }
 
-    const stationCodes = matchedStations.map(s => s.stationCode);
+    // 3. Benzersiz istasyon kodları için degree verisi çek
+    const uniqueStationCodes = [...new Set(cityMappings.map(m => m.stationCode))];
 
-    // 3. Bu istasyonların tüm degree verisini çek
     const degreeRows = await db
       .select()
       .from(mgmDegreeDataTable)
-      .where(inArray(mgmDegreeDataTable.stationCode, stationCodes));
+      .where(inArray(mgmDegreeDataTable.stationCode, uniqueStationCodes));
 
     if (degreeRows.length === 0) {
-      res.json({ synced: 0, provinces: [], message: "MGM pool henüz dolu değil, lütfen bekleyin" });
-      return;
+      res.json({ synced: 0, provinces: [], message: "MGM pool henüz dolu değil, lütfen bekleyin" }); return;
     }
 
-    // stationCode → station bilgisi haritası
-    const stationMap = new Map(matchedStations.map(s => [s.stationCode, s]));
+    // stationCode → bu istasyonu kullanan tüm şehir mapping'leri
+    const stationToCities = new Map<string, CityMapping[]>();
+    for (const mapping of cityMappings) {
+      const arr = stationToCities.get(mapping.stationCode) ?? [];
+      arr.push(mapping);
+      stationToCities.set(mapping.stationCode, arr);
+    }
 
-    // 4. Mevcut kayıtları temizle (ilgili şehirler + bu şirket)
-    const provinceList = [...new Set(matchedStations.map(s => s.il))];
+    // 4. Sadece isOfficial=false, bu şirkete ait hesaplanmış kayıtları sil
+    //    Resmi kayıtlar (isOfficial=true) hiçbir koşulda silinmez.
+    const provinceList = [...new Set(cityMappings.map(m => m.il))];
     await db
       .delete(weatherDegreeDaysTable)
       .where(
@@ -503,35 +527,41 @@ router.post("/weather-degree-days/sync", requireAuth, async (req, res) => {
           eq(weatherDegreeDaysTable.companyId, companyId),
           inArray(weatherDegreeDaysTable.province, provinceList),
           eq(weatherDegreeDaysTable.periodType, "monthly"),
-          eq(weatherDegreeDaysTable.source, "mgm")
+          eq(weatherDegreeDaysTable.source, "mgm"),
+          eq(weatherDegreeDaysTable.isOfficial, false),
         )
       );
 
-    // 5. Yeni kayıtları toplu ekle
-    const toInsert = degreeRows.map(row => {
-      const station = stationMap.get(row.stationCode)!;
-      return {
-        companyId,
-        province: station.il,
-        district: station.ilce ?? null,
-        stationCode: station.stationCode,
-        stationName: station.name,
-        date: `${row.year}-${String(row.month).padStart(2, "0")}`,
-        year: row.year,
-        month: row.month,
-        periodType: "monthly" as const,
-        baseTemperatureHeating: 18,
-        baseTemperatureCooling: 22,
-        hdd: row.hdd,
-        cdd: row.cdd,
-        avgTemperature: null,
-        source: "mgm",
-        isOfficial: false,
-        dataMethod: "calculated_daily",
-      };
-    });
+    // 5. Her degree satırı × bu istasyonu kullanan her şehir eşleşmesi için kayıt oluştur
+    type WDDInsert = typeof weatherDegreeDaysTable.$inferInsert;
+    const toInsert: WDDInsert[] = [];
+    for (const degreeRow of degreeRows) {
+      const mappings = stationToCities.get(degreeRow.stationCode) ?? [];
+      for (const mapping of mappings) {
+        toInsert.push({
+          companyId,
+          province: mapping.il,
+          district: null,
+          stationCode: mapping.stationCode,
+          stationName: mapping.stationName,
+          stationNote: mapping.fallbackNote,
+          date: `${degreeRow.year}-${String(degreeRow.month).padStart(2, "0")}`,
+          year: degreeRow.year,
+          month: degreeRow.month,
+          periodType: "monthly",
+          baseTemperatureHeating: 18,
+          baseTemperatureCooling: 22,
+          hdd: degreeRow.hdd,
+          cdd: degreeRow.cdd,
+          avgTemperature: null,
+          source: "mgm",
+          isOfficial: false,
+          dataMethod: "calculated_daily",
+        });
+      }
+    }
 
-    // Toplu insert — 500'lük dilimler
+    // 500'lük batch insert
     const CHUNK = 500;
     let inserted = 0;
     for (let i = 0; i < toInsert.length; i += CHUNK) {
@@ -539,11 +569,15 @@ router.post("/weather-degree-days/sync", requireAuth, async (req, res) => {
       inserted += Math.min(CHUNK, toInsert.length - i);
     }
 
+    const fallbackCount = cityMappings.filter(m => m.isFallback).length;
+    const fallbackMsg = fallbackCount > 0 ? ` (${fallbackCount} şehir için fallback istasyon kullanıldı)` : "";
+    const unmatchedMsg = unmatchedCities.length > 0 ? ` | Eşleşemeyen: ${unmatchedCities.join(", ")}` : "";
+
     res.json({
       synced: inserted,
       provinces: provinceList,
-      stations: matchedStations.length,
-      message: `${provinceList.join(", ")} için ${inserted} aylık HDD/CDD kaydı aktarıldı`,
+      stations: uniqueStationCodes.length,
+      message: `${provinceList.join(", ")} için ${inserted} aylık HDD/CDD kaydı aktarıldı${fallbackMsg}${unmatchedMsg}`,
     });
   } catch (err) {
     req.log.error(err);

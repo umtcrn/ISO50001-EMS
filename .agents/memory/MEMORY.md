@@ -3,3 +3,4 @@
 - [EMS Orval Zod export conflict](ems-orval-zod-conflict.md) — When Orval generates request body types, both api.ts (Zod) and types/ dir export same names; fix: only export from api.ts in api-zod/src/index.ts
 - [EMS Risk Notes feature](ems-risk-notes.md) — riskNotesTable added with cascade FK; notes returned embedded in GET /risks; admin-only PATCH/DELETE note endpoints
 - [EMS MGM Degree Day Pool](ems-mgm-pool.md) — Global HDD/CDD pool seeded at startup; consumption POST auto-lookups from pool; snapshot stored in weatherStationName/Note columns
+- [Drizzle Migration When Ordering](ems-drizzle-when-ordering.md) — migrate() skips if folderMillis ≤ max(created_at); new migrations need when > all existing when values

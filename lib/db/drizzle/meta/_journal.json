@@ -54,7 +54,7 @@
     {
       "idx": 7,
       "version": "7",
-      "when": 1750700000000,
+      "when": 1782400000000,
       "tag": "0007_weather_degree_days_official",
       "breakpoints": true
     }
