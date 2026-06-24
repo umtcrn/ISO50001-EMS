@@ -436,6 +436,98 @@ export const insertWeatherDegreeDaySchema = createInsertSchema(weatherDegreeDays
 export type InsertWeatherDegreeDay = z.infer<typeof insertWeatherDegreeDaySchema>;
 export type WeatherDegreeDay = typeof weatherDegreeDaysTable.$inferSelect;
 
+// ── Energy Performance Indicators (EnPG) ──────────────────
+export const energyPerformanceIndicatorsTable = pgTable("energy_performance_indicators", {
+  id: serial("id").primaryKey(),
+  companyId: integer("company_id").references(() => companiesTable.id).notNull().default(1),
+  unitId: integer("unit_id").references(() => unitsTable.id, { onDelete: "cascade" }),
+  seuAssessmentItemId: integer("seu_assessment_item_id").references(() => seuAssessmentItemsTable.id, { onDelete: "set null" }),
+  name: text("name").notNull(),
+  energySourceId: integer("energy_source_id").references(() => energySourcesTable.id, { onDelete: "set null" }),
+  energyUseGroupId: integer("energy_use_group_id").references(() => energyUseGroupsTable.id, { onDelete: "set null" }),
+  meterId: integer("meter_id").references(() => metersTable.id, { onDelete: "set null" }),
+  indicatorType: text("indicator_type").notNull().default("consumption"),
+  formulaType: text("formula_type").notNull().default("absolute"),
+  unit: text("unit"),
+  description: text("description"),
+  isActive: boolean("is_active").notNull().default(true),
+  createdByUserId: integer("created_by_user_id").references(() => usersTable.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertEnergyPerformanceIndicatorSchema = createInsertSchema(energyPerformanceIndicatorsTable).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertEnergyPerformanceIndicator = z.infer<typeof insertEnergyPerformanceIndicatorSchema>;
+export type EnergyPerformanceIndicator = typeof energyPerformanceIndicatorsTable.$inferSelect;
+
+// ── Energy Baselines (EnRÇ) ────────────────────────────────
+export const energyBaselinesTable = pgTable("energy_baselines", {
+  id: serial("id").primaryKey(),
+  companyId: integer("company_id").references(() => companiesTable.id).notNull().default(1),
+  unitId: integer("unit_id").references(() => unitsTable.id, { onDelete: "cascade" }),
+  seuAssessmentItemId: integer("seu_assessment_item_id").references(() => seuAssessmentItemsTable.id, { onDelete: "set null" }),
+  enpiId: integer("enpi_id").references(() => energyPerformanceIndicatorsTable.id, { onDelete: "set null" }),
+  baselineYear: integer("baseline_year").notNull(),
+  periodStart: text("period_start").notNull(),
+  periodEnd: text("period_end").notNull(),
+  modelType: text("model_type").notNull().default("linear"),
+  intercept: real("intercept"),
+  rSquared: real("r_squared"),
+  adjustedRSquared: real("adjusted_r_squared"),
+  isValid: boolean("is_valid").notNull().default(false),
+  status: text("status").notNull().default("draft"),
+  updateReason: text("update_reason"),
+  createdByUserId: integer("created_by_user_id").references(() => usersTable.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertEnergyBaselineSchema = createInsertSchema(energyBaselinesTable).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertEnergyBaseline = z.infer<typeof insertEnergyBaselineSchema>;
+export type EnergyBaseline = typeof energyBaselinesTable.$inferSelect;
+
+// ── Energy Baseline Variables ──────────────────────────────
+export const energyBaselineVariablesTable = pgTable("energy_baseline_variables", {
+  id: serial("id").primaryKey(),
+  baselineId: integer("baseline_id").references(() => energyBaselinesTable.id, { onDelete: "cascade" }).notNull(),
+  variableId: integer("variable_id").references(() => variablesTable.id, { onDelete: "set null" }),
+  variableName: text("variable_name").notNull(),
+  variableSource: text("variable_source").notNull().default("manual"),
+  coefficient: real("coefficient"),
+  pValue: real("p_value"),
+  isSignificant: boolean("is_significant").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertEnergyBaselineVariableSchema = createInsertSchema(energyBaselineVariablesTable).omit({ id: true, createdAt: true });
+export type InsertEnergyBaselineVariable = z.infer<typeof insertEnergyBaselineVariableSchema>;
+export type EnergyBaselineVariable = typeof energyBaselineVariablesTable.$inferSelect;
+
+// ── Energy Performance Results (EnPG Sonuçları) ───────────
+export const energyPerformanceResultsTable = pgTable("energy_performance_results", {
+  id: serial("id").primaryKey(),
+  companyId: integer("company_id").references(() => companiesTable.id).notNull().default(1),
+  unitId: integer("unit_id").references(() => unitsTable.id, { onDelete: "cascade" }),
+  seuAssessmentItemId: integer("seu_assessment_item_id").references(() => seuAssessmentItemsTable.id, { onDelete: "set null" }),
+  enpiId: integer("enpi_id").references(() => energyPerformanceIndicatorsTable.id, { onDelete: "set null" }),
+  baselineId: integer("baseline_id").references(() => energyBaselinesTable.id, { onDelete: "set null" }),
+  year: integer("year").notNull(),
+  month: integer("month").notNull(),
+  actualConsumption: real("actual_consumption"),
+  expectedConsumption: real("expected_consumption"),
+  difference: real("difference"),
+  cusum: real("cusum"),
+  eei: real("eei"),
+  setValue: real("set_value"),
+  status: text("status"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertEnergyPerformanceResultSchema = createInsertSchema(energyPerformanceResultsTable).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertEnergyPerformanceResult = z.infer<typeof insertEnergyPerformanceResultSchema>;
+export type EnergyPerformanceResult = typeof energyPerformanceResultsTable.$inferSelect;
+
 // ── Reports ───────────────────────────────────────────────
 export const reportsTable = pgTable("reports", {
   id: serial("id").primaryKey(),

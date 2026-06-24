@@ -1,0 +1,191 @@
+ISO 50001 prosedürümüze uygun EnPG / EnRÇ modülünün temel altyapısını kur.
+
+Amaç:
+ÖEK/SEU modülünde accepted_as_seu olarak kabul edilmiş ÖEK kayıtları üzerinden Enerji Performans Göstergeleri (EnPG) ve Enerji Referans Çizgisi (EnRÇ) sürecinin temelini oluşturmak.
+
+Bu promptta sadece temel veri modeli, API ve UI iskeleti kurulacak. Regresyon hesaplama, FARK/CUSUM/EEI/SET hesaplama ve grafikler sonraki adımlarda yapılacak.
+
+Genel akış:
+ÖEK seçimi
+→ İlgili ÖEK için enerji tüketim verisi ve değişken veri seti hazırlığı
+→ Regresyon analizi
+→ EnRÇ kaydı
+→ EnPG izleme
+
+Bu promptun kapsamı:
+
+1. Menü / Route
+
+- ISO 50001 kategorisi altında yeni bir sayfa oluştur:
+  “Performans Göstergeleri”
+- Alt açıklama:
+  “EnPG / EnRÇ / Regresyon Analizi”
+
+2. Rol bazlı davranış
+
+- Normal kullanıcı sadece kendi atanmış unitId kapsamındaki accepted_as_seu ÖEK kayıtlarını görebilmeli.
+- Firma admini kendi companyId kapsamındaki birimleri seçebilmeli.
+- Firma admini birim seçip o birime ait accepted_as_seu ÖEK kayıtlarını görebilmeli.
+- Tenant güvenliği korunmalı.
+
+3. UI sekmeleri
+   Sayfa şu sekmelerden oluşsun:
+
+- ÖEK Seçimi
+- Veri Seti Hazırlığı
+- Regresyon Analizi
+- EnRÇ Kayıtları
+- EnPG İzleme
+
+Bu promptta Regresyon Analizi, EnRÇ Kayıtları ve EnPG İzleme sekmeleri placeholder olabilir ama sayfa yapısı kurulmalı.
+
+4. ÖEK Seçimi sekmesi
+
+- Kullanıcı kabul edilmiş ÖEK kayıtlarını görsün.
+- Sadece userDecision = accepted_as_seu olan ÖEK karar itemları listelensin.
+- ÖEK Dışı ve İzleme kayıtları bu modülde ana seçim olarak gösterilmesin.
+- Listede şu bilgiler olsun:
+  - yıl
+  - birim
+  - enerji kullanım grubu / analiz öğesi adı
+  - TEP tüketim
+  - pay %
+  - öncelik
+  - karar gerekçesi
+  - kaynak: Analizden Oluşturuldu / Manuel Kayıt
+- Kullanıcı bir ÖEK seçebilsin.
+- Seçilen ÖEK sonraki sekmelere taşınsın.
+
+5. Veri Seti Hazırlığı sekmesi
+
+- Seçilen ÖEK için geçmiş 12 aylık enerji tüketim verisi hazırlanacak şekilde endpoint ve UI iskeleti kur.
+- Şimdilik sadece tablo göster:
+  - yıl
+  - ay
+  - gerçekleşen enerji tüketimi
+  - enerji kaynağı
+  - TEP
+  - varsa ilişkili sayaç / enerji kullanım grubu
+- Değişken seçim alanı oluştur:
+  - HDD
+  - CDD
+  - üretim miktarı
+  - çalışma saati
+  - personel sayısı
+  - alan/m²
+  - misafir sayısı
+  - kilometre
+  - ekipman çalışma süresi
+  - arıza sayısı
+  - bakım sayısı
+  - anahtarlama ekipmanları açma/kapama sayısı
+  - TM’lerde aktarılan enerji miktarı
+  - sayısal hale getirilebilen diğer değişkenler
+- Bu değişkenler mevcut Değişken Yönetimi modülünden okunabiliyorsa oradan getirilsin.
+- HDD/CDD için mevcut weather_degree_days / resmi MGM aylık veri mantığı kullanılsın.
+
+6. Veritabanı
+   Gerekirse yeni tablolar oluştur:
+
+energy_performance_indicators:
+
+- id
+- company_id
+- unit_id
+- seu_assessment_item_id
+- name
+- energy_source_id nullable
+- energy_use_group_id nullable
+- meter_id nullable
+- indicator_type
+- formula_type
+- unit
+- description
+- is_active
+- created_by_user_id
+- created_at
+- updated_at
+
+energy_baselines:
+
+- id
+- company_id
+- unit_id
+- seu_assessment_item_id
+- enpi_id nullable
+- baseline_year
+- period_start
+- period_end
+- model_type
+- intercept nullable
+- r_squared nullable
+- adjusted_r_squared nullable
+- is_valid boolean default false
+- status text default 'draft'
+- update_reason nullable
+- created_by_user_id
+- created_at
+- updated_at
+
+energy_baseline_variables:
+
+- id
+- baseline_id
+- variable_id nullable
+- variable_name
+- variable_source
+- coefficient nullable
+- p_value nullable
+- is_significant boolean default false
+- created_at
+
+energy_performance_results:
+
+- id
+- company_id
+- unit_id
+- seu_assessment_item_id
+- enpi_id nullable
+- baseline_id nullable
+- year
+- month
+- actual_consumption nullable
+- expected_consumption nullable
+- difference nullable
+- cusum nullable
+- eei nullable
+- set_value nullable
+- status nullable
+- created_at
+- updated_at
+
+7. API endpointleri
+   Şimdilik şu endpointleri ekle:
+
+- GET /api/energy-performance/seu-items
+  - accepted_as_seu ÖEK itemlarını döndürür
+- GET /api/energy-performance/dataset?seuItemId=...&year=...
+  - seçilen ÖEK için geçmiş 12 aylık tüketim ve değişken veri hazırlık setini döndürür
+- GET /api/energy-performance/variables?seuItemId=...
+  - seçilebilir değişkenleri döndürür
+
+8. Prosedür açıklaması
+   Veri Seti Hazırlığı ekranında bilgi kutusu göster:
+   “Enerji değişkenlerinin enerji tüketimi üzerindeki etkisini belirleme yöntemi regresyon analizidir. Geçmiş 12 aylık enerji tüketim verileri ve sayısal değişkenler kullanılır.”
+
+9. Teknik şartlar
+
+- Mevcut ÖEK/SEU modülünü bozma.
+- Mevcut değişkenler, tüketim ve weather_degree_days yapılarını bozma.
+- Yeni onay mekanizması ekleme.
+- PDF/Excel export ekleme.
+- TypeScript/build hatası bırakma.
+- Migration gerekiyorsa Drizzle migration olarak ekle.
+- Migration journal when değeri önceki migrationlardan büyük olmalı.
+- Tenant güvenliği korunmalı.
+
+Kontrol:
+pnpm --filter @workspace/api-server build
+pnpm --filter @workspace/ems-dashboard build
+
+Sonunda değişen dosyaları ve test sonucunu kısa özetle.

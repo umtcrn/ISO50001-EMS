@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import {
   Activity, AlertTriangle, BarChart2, Building2, CloudLightning, FileText,
-  Gauge, Home, LayoutDashboard, Lightbulb, ShieldAlert, Target, User, LogOut, Globe, Building, Layers, Variable,
+  Gauge, Home, LayoutDashboard, Lightbulb, ShieldAlert, Target, User, LogOut, Globe, Building, Layers, Variable, TrendingUp,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -60,6 +60,7 @@ const COMMON_NAV = [
       { title: "SWOT Analizi", url: "/swot", icon: Target },
       { title: "Risk & Fırsat", url: "/riskler", icon: ShieldAlert },
       { title: "Önemli Enerji Kullanımları", url: "/oek", icon: AlertTriangle },
+      { title: "Performans Göstergeleri", url: "/performans-gostergeleri", icon: TrendingUp },
     ],
   },
   {

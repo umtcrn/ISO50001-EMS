@@ -26,6 +26,7 @@ import Targets from "@/pages/Targets";
 import Companies from "@/pages/Companies";
 import EnergyUseGroups from "@/pages/EnergyUseGroups";
 import Variables from "@/pages/Variables";
+import EnergyPerformance from "@/pages/EnergyPerformance";
 
 const logoutRef = { fn: () => {} };
 
@@ -80,6 +81,7 @@ function Router() {
         {() => <SuperAdminRoute component={Companies} />}
       </Route>
       <Route path="/degiskenler" component={Variables} />
+      <Route path="/performans-gostergeleri" component={EnergyPerformance} />
       <Route component={NotFound} />
     </Switch>
   );
