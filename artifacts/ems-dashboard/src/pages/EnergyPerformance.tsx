@@ -44,6 +44,8 @@ interface SeuItemRow {
   decisionReason: string | null;
   assessmentYear: number;
   assessmentRecordType: string;
+  assessmentIsOfficial: boolean | null;
+  unitId: number | null;
   unitName: string | null;
   energySourceName: string | null;
   energyUseGroupName: string | null;

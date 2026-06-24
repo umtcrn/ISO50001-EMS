@@ -41,16 +41,17 @@ router.get("/energy-performance/seu-items", requireAuth, async (req, res) => {
         energySourceId: seuAssessmentItemsTable.energySourceId,
         energyUseGroupId: seuAssessmentItemsTable.energyUseGroupId,
         meterId: seuAssessmentItemsTable.meterId,
-        unitId: seuAssessmentItemsTable.unitId,
+        unitId: seuAssessmentsTable.unitId,
         assessmentYear: seuAssessmentsTable.year,
         assessmentRecordType: seuAssessmentsTable.recordType,
+        assessmentIsOfficial: seuAssessmentsTable.isOfficial,
         unitName: unitsTable.name,
         energySourceName: energySourcesTable.name,
         energyUseGroupName: energyUseGroupsTable.name,
       })
       .from(seuAssessmentItemsTable)
       .innerJoin(seuAssessmentsTable, eq(seuAssessmentItemsTable.assessmentId, seuAssessmentsTable.id))
-      .leftJoin(unitsTable, eq(seuAssessmentItemsTable.unitId, unitsTable.id))
+      .leftJoin(unitsTable, eq(seuAssessmentsTable.unitId, unitsTable.id))
       .leftJoin(energySourcesTable, eq(seuAssessmentItemsTable.energySourceId, energySourcesTable.id))
       .leftJoin(energyUseGroupsTable, eq(seuAssessmentItemsTable.energyUseGroupId, energyUseGroupsTable.id))
       .where(
@@ -58,9 +59,9 @@ router.get("/energy-performance/seu-items", requireAuth, async (req, res) => {
           eq(seuAssessmentsTable.companyId, sessionCompanyId),
           eq(seuAssessmentItemsTable.userDecision, "accepted_as_seu"),
           ...(role === "user" && sessionUnitId
-            ? [eq(seuAssessmentItemsTable.unitId, sessionUnitId)]
+            ? [eq(seuAssessmentsTable.unitId, sessionUnitId)]
             : unitId
-              ? [eq(seuAssessmentItemsTable.unitId, unitId)]
+              ? [eq(seuAssessmentsTable.unitId, unitId)]
               : []),
         )
       )

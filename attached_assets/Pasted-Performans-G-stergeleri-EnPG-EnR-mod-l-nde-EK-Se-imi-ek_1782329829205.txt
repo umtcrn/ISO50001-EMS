@@ -1,0 +1,122 @@
+Performans Göstergeleri / EnPG-EnRÇ modülünde ÖEK Seçimi ekranının boş gelmesi hatasını düzelt. Yeni büyük özellik ekleme.
+
+Mevcut hata:
+
+- Kullanıcı ÖEK/SEU modülünde ÖEK kayıtları oluşturmuş durumda.
+- Ancak Performans Göstergeleri > ÖEK Seçimi ekranına gelince hem normal kullanıcıda hem firma admininde liste boş geliyor.
+- Ekranda şu uyarı görünüyor:
+  “Kabul edilmiş ÖEK kalemi bulunamadı. ÖEK/SEU modülünde kalem kararlarını ÖEK Olarak Kabul Et olarak işaretleyin.”
+- Oysa sistemde kullanıcı tarafından kabul edilmiş ÖEK kayıtları var.
+
+Beklenen davranış:
+
+- Performans Göstergeleri > ÖEK Seçimi ekranı, ÖEK/SEU modülünde kabul edilmiş tüm resmi ÖEK karar kalemlerini göstermeli.
+- Normal kullanıcı sadece kendi atanmış unitId kapsamındaki kabul edilmiş ÖEK kalemlerini görmeli.
+- Firma admini kendi companyId kapsamındaki birimleri seçerek veya filtreleyerek kabul edilmiş ÖEK kalemlerini görebilmeli.
+- Manuel girilen ve ÖEK olarak kabul edilen kayıtlar da görünmeli.
+- Analizden oluşturulan ve ÖEK olarak kabul edilen kayıtlar da görünmeli.
+- ÖEK Dışı ve İzleme kararları bu seçim ekranında ana seçim olarak gösterilmemeli.
+
+Kontrol edilecek olası nedenler:
+
+1. Performans göstergeleri endpoint’i yanlış tabloyu okuyor olabilir.
+2. Sadece eski manuel ÖEK tablosunu veya sadece eski SEU yapısını okuyor olabilir.
+3. "userDecision = accepted_as_seu" filtresi mevcut verideki karar değerleriyle uyumsuz olabilir.
+4. Manuel kayıtlar "sourceType=manual" olduğu için filtre dışında kalıyor olabilir.
+5. "recordType = unit_official" filtresi eksik veya yanlış olabilir.
+6. "isOfficial = true" / "is_official = true" alan adı uyumsuzluğu olabilir.
+7. Admin tarafında unitId/companyId filtreleri yanlış uygulanıyor olabilir.
+8. ÖEK item detayları üst assessment kaydıyla join edilmediği için liste boş dönüyor olabilir.
+
+Doğru veri kaynağı:
+
+- Performans Göstergeleri ÖEK Seçimi, ÖEK/SEU karar itemlarını okumalı.
+- Kaynak mantığı:
+  - seu_assessments
+  - seu_assessment_items
+- Filtre:
+  - seu_assessments.company_id = currentUser.companyId
+  - normal kullanıcı için seu_assessments.unit_id = currentUser.unitId
+  - admin için companyId kapsamı, unitId opsiyonel filtre
+  - seu_assessments.record_type = unit_official
+  - seu_assessments.is_official = true
+  - seu_assessment_items.user_decision = accepted_as_seu
+- Manuel kayıtlar da unit_official/is_official=true ise dahil edilmeli.
+- sourceType/source alanı manual veya analysis olsa da accepted_as_seu ise ÖEK Seçimi’nde görünmeli.
+
+Eğer mevcut sistemde userDecision değerleri farklı formatta tutuluyorsa:
+
+- accepted_as_seu
+- accepted
+- seu
+- ÖEK
+  gibi değerleri kontrol et.
+  Ancak yeni kayıt standardı accepted_as_seu olmalı.
+  Gerekirse eski kayıtları normalize eden güvenli bir düzeltme yap veya endpointte geriye dönük uyumluluk sağla.
+
+API düzeltmesi:
+
+- GET /api/energy-performance/seu-items endpointini kontrol et.
+- Bu endpoint kabul edilmiş ÖEK itemlarını doğru döndürmeli.
+- Response içinde şu alanlar olmalı:
+  - seuItemId
+  - assessmentId
+  - companyId
+  - unitId
+  - unitName
+  - year
+  - periodStart
+  - periodEnd
+  - energyUseGroupId
+  - energyUseGroupName
+  - meterId
+  - meterName
+  - energySourceId
+  - energySourceName
+  - itemName
+  - energyTep
+  - consumptionSharePercent
+  - priorityResult
+  - userDecision
+  - decisionReason
+  - sourceType/source
+  - recordType
+  - isOfficial
+- Normal kullanıcıda unitName ekranda ana kart gibi baskın gösterilmesin; bilgi olarak kalabilir.
+- Admin için unitName görünmeli.
+
+Frontend düzeltmesi:
+
+- Performans Göstergeleri > ÖEK Seçimi sekmesi GET /api/energy-performance/seu-items endpointinden gelen kayıtları göstermeli.
+- Liste boşsa gerçekten accepted_as_seu kayıt yoksa uyarı versin.
+- Ama kayıt varsa yanlış filtre nedeniyle boş göstermesin.
+- Manuel kayıtlar “Manuel Kayıt” etiketiyle görünsün.
+- Analizden gelen kayıtlar “Analizden Oluşturuldu” etiketiyle görünsün.
+- Kullanıcı bir ÖEK seçebilsin ve seçilen ÖEK Veri Seti Hazırlığı sekmesine taşınsın.
+
+Test:
+
+1. Normal kullanıcıyla giriş yap.
+2. ÖEK/SEU modülünde en az bir manuel kaydı accepted_as_seu olarak oluştur.
+3. ÖEK/SEU modülünde en az bir analizden gelen kaydı accepted_as_seu olarak oluştur.
+4. Performans Göstergeleri > ÖEK Seçimi ekranına gir.
+5. Her iki kabul edilmiş ÖEK kalemi de görünmeli.
+6. ÖEK Dışı ve İzleme kararları bu listede görünmemeli.
+7. Firma adminiyle giriş yap.
+8. Firma admini aynı kullanıcı birimine ait kabul edilmiş ÖEK kalemlerini görebilmeli.
+9. Admin başka birim seçerse o birimin kabul edilmiş ÖEK kalemleri gelmeli.
+10. Tenant güvenliği korunmalı.
+11. Build kontrolleri çalışmalı:
+    pnpm --filter @workspace/api-server build
+    pnpm --filter @workspace/ems-dashboard build
+
+Teknik şartlar:
+
+- Yeni büyük özellik ekleme.
+- Yeni tablo/migration ekleme, mevcut yapı yeterliyse onu kullan.
+- ÖEK/SEU modülündeki kayıtları bozma.
+- Onay mekanizması ekleme.
+- PDF/Excel export ekleme.
+- TypeScript/build hatası bırakma.
+
+Sonunda değişen dosyaları ve test sonucunu kısa özetle.
