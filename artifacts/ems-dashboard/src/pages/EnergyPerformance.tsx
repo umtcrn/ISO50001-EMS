@@ -26,9 +26,14 @@ const MONTH_SHORT: Record<number, string> = {
   7: "Tem", 8: "Ağu", 9: "Eyl", 10: "Eki", 11: "Kas", 12: "Ara",
 };
 
-async function apiFetch(url: string, token: string | null) {
+async function apiFetch(url: string, token: string | null, options?: RequestInit) {
   const res = await fetch(url, {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    ...options,
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(options?.body ? { "Content-Type": "application/json" } : {}),
+      ...(options?.headers ?? {}),
+    },
   });
   if (!res.ok) throw Object.assign(new Error("API hatası"), { status: res.status });
   return res.json();
@@ -65,6 +70,39 @@ interface ConsumptionRow {
 }
 
 type DatasetMatchType = "meter" | "energyUseGroup" | "subUnit" | "unit" | "manual_unlinked";
+
+interface RegressionVariable {
+  variableName: string;
+  code: string;
+  coefficient: number;
+  standardError: number;
+  tStat: number;
+  pValue: number;
+  isSignificant: boolean;
+}
+
+interface MissingVarMonth {
+  month: string;
+  missingVariables: string[];
+}
+
+interface RegressionResult {
+  modelType: "single_regression" | "multiple_regression";
+  seuItemName: string;
+  year: number;
+  sampleSize: number;
+  intercept: number;
+  rSquared: number;
+  adjustedRSquared: number;
+  variables: RegressionVariable[];
+  isValid: boolean;
+  validationMessages: string[];
+  suggestedVariablesToRemove: string[];
+  formulaText: string;
+  usedMonths: string[];
+  missingVariableMonths: MissingVarMonth[];
+  error?: string;
+}
 
 interface DatasetResponse {
   seuItem: {
@@ -105,6 +143,9 @@ export default function EnergyPerformance() {
   const [unitFilter, setUnitFilter] = useState<number | null>(null);
   const [selectedSeuItem, setSelectedSeuItem] = useState<SeuItemRow | null>(null);
   const [selectedVariables, setSelectedVariables] = useState<string[]>([]);
+  const [regressionResult, setRegressionResult] = useState<RegressionResult | null>(null);
+  const [regressionLoading, setRegressionLoading] = useState(false);
+  const [regressionError, setRegressionError] = useState<string | null>(null);
 
   const { data: units } = useListUnits(
     {} as any,
@@ -140,6 +181,8 @@ export default function EnergyPerformance() {
 
   function handleSelectSeuItem(item: SeuItemRow) {
     setSelectedSeuItem(item);
+    setRegressionResult(null);
+    setRegressionError(null);
     setActiveTab("dataset");
   }
 
@@ -147,6 +190,32 @@ export default function EnergyPerformance() {
     setSelectedVariables(prev =>
       prev.includes(code) ? prev.filter(c => c !== code) : [...prev, code]
     );
+  }
+
+  async function runRegression() {
+    if (!selectedSeuItem || selectedVariables.length === 0) return;
+    setRegressionLoading(true);
+    setRegressionError(null);
+    setRegressionResult(null);
+    try {
+      const result: RegressionResult = await apiFetch(
+        `${API_BASE}/energy-performance/regression/run`,
+        token,
+        {
+          method: "POST",
+          body: JSON.stringify({ seuItemId: selectedSeuItem.id, year, selectedVariables }),
+        }
+      );
+      if (result.error) {
+        setRegressionError(result.error);
+      } else {
+        setRegressionResult(result);
+      }
+    } catch {
+      setRegressionError("Regresyon analizi sırasında sunucu hatası oluştu.");
+    } finally {
+      setRegressionLoading(false);
+    }
   }
 
   return (
@@ -560,21 +629,233 @@ export default function EnergyPerformance() {
           )}
         </TabsContent>
 
-        {/* Regresyon Analizi — Placeholder */}
+        {/* Regresyon Analizi */}
         <TabsContent value="regression">
-          <Card>
-            <CardContent className="py-14 flex flex-col items-center gap-3 text-center">
-              <BarChart2 className="h-10 w-10 text-muted-foreground/30" />
-              <p className="text-sm font-medium text-muted-foreground">Regresyon Analizi</p>
-              <p className="text-xs text-muted-foreground/70 max-w-sm">
-                Seçilen değişkenlerle enerji tüketimi arasındaki ilişki analiz edilecek.
-                R², düzeltilmiş R², EnPG ve EEI metrikleri hesaplanacak.
-              </p>
-              <Badge variant="outline" className="text-xs border-amber-500/30 text-amber-400 bg-amber-500/10 mt-1">
-                Yakında
-              </Badge>
-            </CardContent>
-          </Card>
+          {!selectedSeuItem ? (
+            <Card>
+              <CardContent className="py-10 text-center text-sm text-muted-foreground">
+                Önce ÖEK Seçimi sekmesinden bir kalem seçin.
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-4">
+              {/* Seçili ÖEK + Kontrol Paneli */}
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm font-medium flex items-center gap-2">
+                    <CheckCircle2 className="h-4 w-4 text-teal-400" />
+                    ÖEK: {selectedSeuItem.name}
+                    <span className="text-muted-foreground font-normal">— {year} yılı</span>
+                    <Button
+                      variant="ghost" size="sm" className="ml-auto h-7 text-xs"
+                      onClick={() => { setSelectedSeuItem(null); setActiveTab("seu-selection"); }}
+                    >Değiştir</Button>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-0 space-y-3">
+                  {/* Seçili değişkenler */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs text-muted-foreground shrink-0">Seçili değişkenler:</span>
+                    {selectedVariables.length === 0 ? (
+                      <span className="text-xs text-amber-400">Henüz değişken seçilmedi — Veri Seti Hazırlığı sekmesinden seçin.</span>
+                    ) : (
+                      selectedVariables.map(code => (
+                        <Badge key={code} variant="outline" className="text-xs border-teal-500/30 text-teal-400 bg-teal-500/10">
+                          {code}
+                        </Badge>
+                      ))
+                    )}
+                    {selectedVariables.length > 0 && (
+                      <Button
+                        variant="ghost" size="sm" className="h-6 text-xs ml-1 text-muted-foreground"
+                        onClick={() => setActiveTab("dataset")}
+                      >
+                        Değiştir
+                      </Button>
+                    )}
+                  </div>
+                  {/* Çalıştır butonu */}
+                  <div className="flex items-center gap-3">
+                    <Button
+                      onClick={runRegression}
+                      disabled={regressionLoading || selectedVariables.length === 0}
+                      className="h-8 text-xs bg-teal-600 hover:bg-teal-700 text-white"
+                    >
+                      {regressionLoading ? "Hesaplanıyor…" : "Regresyon Analizi Çalıştır"}
+                      {!regressionLoading && <BarChart2 className="h-3.5 w-3.5 ml-1.5" />}
+                    </Button>
+                    {selectedVariables.length === 0 && (
+                      <span className="text-xs text-muted-foreground">Analiz çalıştırmak için en az 1 değişken seçin.</span>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Hata mesajı */}
+              {regressionError && (
+                <Card className="border-destructive/30 bg-destructive/5">
+                  <CardContent className="p-4 flex gap-2 items-start">
+                    <AlertCircle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
+                    <p className="text-sm text-destructive">{regressionError}</p>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Sonuçlar */}
+              {regressionResult && (
+                <div className="space-y-4">
+                  {/* Geçerlilik kartı */}
+                  <Card className={regressionResult.isValid
+                    ? "border-teal-500/30 bg-teal-500/5"
+                    : "border-destructive/30 bg-destructive/5"
+                  }>
+                    <CardContent className="p-4 flex items-start gap-3">
+                      {regressionResult.isValid
+                        ? <CheckCircle2 className="h-5 w-5 text-teal-400 shrink-0 mt-0.5" />
+                        : <AlertTriangle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
+                      }
+                      <div>
+                        <p className={`text-sm font-medium ${regressionResult.isValid ? "text-teal-300" : "text-destructive"}`}>
+                          {regressionResult.isValid
+                            ? "Bu model prosedür kriterlerini sağlamaktadır."
+                            : "Bu model prosedür kriterlerini sağlamamaktadır; aktif EnRÇ olarak kaydedilemez."
+                          }
+                        </p>
+                        <ul className="mt-1 space-y-0.5">
+                          {regressionResult.validationMessages.map((msg, i) => (
+                            <li key={i} className="text-xs text-muted-foreground">{msg}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Metrik kartları */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    {[
+                      {
+                        label: "Model Tipi",
+                        value: regressionResult.modelType === "single_regression" ? "Tekli Regresyon" : "Çoklu Regresyon",
+                        sub: `${regressionResult.sampleSize} aylık veri`,
+                        color: "text-foreground",
+                      },
+                      {
+                        label: "R²",
+                        value: regressionResult.rSquared.toFixed(4),
+                        sub: regressionResult.rSquared >= 0.75 ? "≥ 0.75 ✓" : "< 0.75 ✗",
+                        color: regressionResult.rSquared >= 0.75 ? "text-teal-400" : "text-destructive",
+                      },
+                      {
+                        label: "Ayarlı R²",
+                        value: regressionResult.adjustedRSquared.toFixed(4),
+                        sub: regressionResult.adjustedRSquared >= 0.75 ? "≥ 0.75 ✓" : "< 0.75 ✗",
+                        color: regressionResult.adjustedRSquared >= 0.75 ? "text-teal-400" : "text-destructive",
+                      },
+                      {
+                        label: "Kesişim (Intercept)",
+                        value: regressionResult.intercept.toFixed(4),
+                        sub: "TEP",
+                        color: "text-foreground",
+                      },
+                    ].map(card => (
+                      <Card key={card.label} className="border-border/50">
+                        <CardContent className="p-3">
+                          <p className="text-xs text-muted-foreground mb-1">{card.label}</p>
+                          <p className={`text-lg font-semibold tabular-nums ${card.color}`}>{card.value}</p>
+                          <p className="text-xs text-muted-foreground">{card.sub}</p>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+
+                  {/* Değişken tablosu */}
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-medium">Değişken Sonuçları</CardTitle>
+                      <p className="text-xs text-muted-foreground">P değeri &lt; 0.1 olan değişkenler anlamlı kabul edilir.</p>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-xs">
+                          <thead>
+                            <tr className="border-b border-border/50 text-muted-foreground">
+                              <th className="text-left p-2 pl-0 font-medium">Değişken</th>
+                              <th className="text-right p-2 font-medium">Katsayı</th>
+                              <th className="text-right p-2 font-medium">Std. Hata</th>
+                              <th className="text-right p-2 font-medium">t İstatistiği</th>
+                              <th className="text-right p-2 font-medium">P Değeri</th>
+                              <th className="text-center p-2 font-medium">Anlamlı?</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {regressionResult.variables.map((v, i) => (
+                              <tr key={i} className={`border-b border-border/30 ${!v.isSignificant ? "bg-destructive/5" : ""}`}>
+                                <td className="p-2 pl-0 font-medium">{v.variableName}</td>
+                                <td className="p-2 text-right tabular-nums">{v.coefficient.toFixed(6)}</td>
+                                <td className="p-2 text-right tabular-nums text-muted-foreground">{v.standardError.toFixed(6)}</td>
+                                <td className="p-2 text-right tabular-nums text-muted-foreground">{v.tStat.toFixed(4)}</td>
+                                <td className={`p-2 text-right tabular-nums font-medium ${v.isSignificant ? "text-teal-400" : "text-destructive"}`}>
+                                  {v.pValue.toFixed(4)}
+                                </td>
+                                <td className="p-2 text-center">
+                                  {v.isSignificant
+                                    ? <span className="text-teal-400">✓ Evet</span>
+                                    : <span className="text-destructive">✗ Hayır</span>
+                                  }
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      {/* Anlamlı olmayan değişken önerisi */}
+                      {regressionResult.suggestedVariablesToRemove.length > 0 && (
+                        <div className="mt-3 p-3 rounded-md bg-amber-500/10 border border-amber-500/20 flex gap-2">
+                          <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
+                          <p className="text-xs text-amber-300">
+                            <span className="font-medium">Sistem önerisi:</span> P değeri 0.1'den büyük olan değişkenleri (
+                            {regressionResult.suggestedVariablesToRemove.join(", ")}) çıkararak yeniden analiz yapmanız önerilir.
+                          </p>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  {/* Formül */}
+                  <Card className="border-border/50 bg-muted/20">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-medium">Regresyon Formülü</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-xs font-mono text-teal-300 break-all">{regressionResult.formulaText}</p>
+                      <p className="text-xs text-muted-foreground mt-2">
+                        Bağımlı değişken: Aylık toplam enerji tüketimi (TEP)
+                      </p>
+                    </CardContent>
+                  </Card>
+
+                  {/* Kullanılan aylar */}
+                  <Card className="border-border/40">
+                    <CardContent className="p-4">
+                      <div className="flex flex-wrap gap-2 items-center">
+                        <span className="text-xs text-muted-foreground shrink-0">Analizde kullanılan aylar ({regressionResult.sampleSize}):</span>
+                        {regressionResult.usedMonths.map(m => (
+                          <Badge key={m} variant="outline" className="text-xs border-border text-muted-foreground">{m}</Badge>
+                        ))}
+                      </div>
+                      {regressionResult.missingVariableMonths.length > 0 && (
+                        <div className="mt-2 text-xs text-muted-foreground">
+                          <span className="text-amber-400">Eksik değişken verisi nedeniyle hariç tutulan aylar: </span>
+                          {regressionResult.missingVariableMonths.map(m => m.month).join(", ")}
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
+              )}
+            </div>
+          )}
         </TabsContent>
 
         {/* EnRÇ Kayıtları — Placeholder */}

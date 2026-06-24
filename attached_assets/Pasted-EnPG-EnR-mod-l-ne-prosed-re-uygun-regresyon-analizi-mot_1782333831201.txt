@@ -1,0 +1,128 @@
+EnPG / EnRÇ modülüne prosedüre uygun regresyon analizi motorunu ekle.
+
+Amaç:
+Seçilen ÖEK için geçmiş 12 aylık enerji tüketimi ve seçilen enerji değişkenleri kullanılarak tekli veya çoklu regresyon analizi yapılmalı. Sonuçta R², Ayarlı R², P değerleri ve katsayılar hesaplanmalı.
+
+Prosedür kuralı:
+Enerji değişkenlerinin enerji tüketimi üzerindeki etkisini belirleme yöntemi regresyon analizidir.
+
+Enerji değişkeni örnekleri:
+
+- TM’lerde aktarılan enerji miktarı
+- tesis ana ekipmanları bakım sayısı
+- anahtarlama ekipmanları açma ve kapama sayısı
+- HDD
+- CDD
+- misafir sayısı
+- kilometre
+- ekipman çalışma süreleri
+- arıza sayıları
+- bakım sayıları
+- üretim miktarı
+- personel sayısı
+- alan/m²
+- sayısal hale getirilebilen diğer değişkenler
+
+Regresyon değerlendirme kuralı:
+
+- Eğer analizde tek değişken varsa R² değerine bakılır.
+- Eğer analizde birden fazla değişken varsa Ayarlı R² değerine bakılır.
+- Tek değişkenli analizde R² >= 0.75 olmalıdır.
+- Çok değişkenli analizde Ayarlı R² >= 0.75 olmalıdır.
+- Her durumda her değişken için P değeri < 0.1 olmalıdır.
+- P değeri 0.1’den büyük olan değişken enerji tüketiminde etkili değişken olarak kabul edilmemelidir.
+- P değeri 0.1’den büyük olan değişkenler çıkarılarak kalan değişkenlerle yeniden regresyon yapılabilmelidir.
+
+Beklenen API:
+POST /api/energy-performance/regression/run
+
+Request:
+
+- seuItemId
+- year
+- selectedVariables: string[] veya variableId[]
+- baselinePeriodStart
+- baselinePeriodEnd
+
+Response:
+
+- modelType: single_regression veya multiple_regression
+- intercept
+- coefficients
+- rSquared
+- adjustedRSquared
+- variables:
+  - variableName
+  - coefficient
+  - pValue
+  - isSignificant
+- isValid
+- validationMessages
+- suggestedVariablesToRemove
+- formulaText
+- sampleSize
+- usedMonths
+
+Regresyon hesaplama:
+
+- 12 aylık veri kullanılsın.
+- En az 6 aylık veri yoksa regresyon çalıştırma ve uyarı ver.
+- 12 aylık veri eksikse kullanıcıya hangi ayların eksik olduğunu göster.
+- Tüketim verisi bağımlı değişken Y olmalı.
+- Seçilen enerji değişkenleri bağımsız değişken X olmalı.
+- Basit doğrusal regresyon ve çoklu doğrusal regresyon desteklensin.
+- P değeri hesaplaması için uygun istatistiksel yöntem kullanılmalı.
+- Eğer p-value hesaplama için yardımcı kütüphane gerekiyorsa mevcut package yapısını bozmayacak hafif bir çözüm kullan.
+- TypeScript/build hatası bırakma.
+
+UI:
+Regresyon Analizi sekmesi aktif hale getirilsin.
+
+- Kullanıcı ÖEK seçmeden regresyon çalıştıramasın.
+- Kullanıcı değişken seçmeden regresyon çalıştıramasın.
+- “Regresyon Analizi Çalıştır” butonu olsun.
+- Sonuç kartları:
+  - Model tipi
+  - R²
+  - Ayarlı R²
+  - Model geçerli mi?
+  - Kullanılan veri sayısı
+- Değişken sonuç tablosu:
+  - değişken adı
+  - katsayı
+  - P değeri
+  - anlamlı mı?
+- Formül gösterilsin:
+  “Beklenen Tüketim = Kesişim + Katsayı1 × Değişken1 + Katsayı2 × Değişken2”
+- P değeri uygun olmayan değişkenler kırmızı/uyarı şeklinde gösterilsin.
+- Sistem önerisi göster:
+  “P değeri 0.1’den büyük olan değişkenleri çıkararak yeniden analiz yapmanız önerilir.”
+- Model kriterleri sağlanıyorsa:
+  “Bu model prosedür kriterlerini sağlamaktadır.”
+- Model kriterleri sağlanmıyorsa:
+  “Bu model prosedür kriterlerini sağlamamaktadır; aktif EnRÇ olarak kaydedilemez.”
+
+Backend güvenlik:
+
+- Normal kullanıcı sadece kendi unitId kapsamındaki ÖEK için analiz yapabilmeli.
+- Admin kendi companyId kapsamındaki birimler için analiz yapabilmeli.
+- Tenant güvenliği korunmalı.
+
+Teknik şartlar:
+
+- Mevcut tabloları bozma.
+- Yeni tablo gerekiyorsa minimum migration kullan.
+- Onay mekanizması ekleme.
+- PDF/Excel export ekleme.
+- TypeScript/build hatası bırakma.
+
+Kontrol:
+
+1. Tek değişken seçildiğinde R² kriteri kullanılıyor mu?
+2. Birden fazla değişken seçildiğinde Ayarlı R² kriteri kullanılıyor mu?
+3. P değeri 0.1’den büyük değişken anlamlı kabul edilmiyor mu?
+4. Build geçiyor mu?
+   pnpm --filter @workspace/api-server build
+   pnpm --filter @workspace/ems-dashboard build
+
+Sonunda değişen dosyaları ve test sonucunu kısa özetle.

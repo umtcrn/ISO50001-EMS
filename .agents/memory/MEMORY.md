@@ -6,3 +6,4 @@
 - [Drizzle Migration When Ordering](ems-drizzle-when-ordering.md) — migrate() skips if folderMillis ≤ max(created_at); new migrations need when > all existing when values
 - [EMS SEU Assessment Module](ems-seu-assessment.md) — seuAssessmentsTable + seuAssessmentItemsTable (migration 0008); analyze endpoint groups consumption by 5 levels; role-based save (unit_official vs admin_review); frontend tabbed UI in components/seu/
 - [EMS EnPG/EnRÇ Module](ems-enpg-module.md) — migration 0009 (when 1782600000000); 4 new tables; GET /api/energy-performance/{seu-items,dataset,variables}; page at /performans-gostergeleri; menu under ISO 50001 group
+- [EMS Regression Engine](ems-regression-engine.md) — Pure-TS OLS in energy-performance.ts; POST /regression/run; p-value via incomplete beta (Lentz CF + Lanczos lgamma); prosedür: single→R², multi→AdjR²; both must be ≥0.75; p<0.1 per variable
