@@ -9,6 +9,7 @@ import {
   unitsTable,
   seuAssessmentsTable,
   seuAssessmentItemsTable,
+  seuTable,
 } from "@workspace/db";
 import { eq, and, gte, lte, sql, desc, inArray } from "drizzle-orm";
 import { requireAuth } from "../middlewares/auth.js";
@@ -144,7 +145,6 @@ router.get("/seu/analyze", requireAuth, async (req, res) => {
         energyTep: Number(totals?.energyTep) || 0, missingCount: Number(totals?.missingCount) || 0,
       }];
     } else {
-      // Default: energyUseGroup
       const rows = await db
         .select({
           groupId: energyUseGroupsTable.id,
@@ -468,6 +468,61 @@ router.patch("/seu/assessments/:id/items/:itemId", requireAuth, async (req, res)
   }
 });
 
+// ── PATCH /seu/decision-items/analysis/:itemId ───────────
+// Shorthand: update an analysis item knowing only itemId (no assessmentId needed)
+router.patch("/seu/decision-items/analysis/:itemId", requireAuth, async (req, res) => {
+  try {
+    const { role, companyId: sessionCompanyId, unitId: sessionUnitId } = req.user!;
+    const itemId = parseInt(req.params.itemId as string);
+
+    const [existingItem] = await db
+      .select({ id: seuAssessmentItemsTable.id, assessmentId: seuAssessmentItemsTable.assessmentId, consumptionSharePercent: seuAssessmentItemsTable.consumptionSharePercent })
+      .from(seuAssessmentItemsTable)
+      .where(eq(seuAssessmentItemsTable.id, itemId));
+    if (!existingItem) { res.status(404).json({ error: "Kalem bulunamadı" }); return; }
+
+    const [assessment] = await db
+      .select()
+      .from(seuAssessmentsTable)
+      .where(and(eq(seuAssessmentsTable.id, existingItem.assessmentId), eq(seuAssessmentsTable.companyId, sessionCompanyId)));
+    if (!assessment) { res.status(404).json({ error: "Bulunamadı" }); return; }
+
+    if (role === "user" && assessment.unitId !== sessionUnitId) {
+      res.status(403).json({ error: "Yetki yok" }); return;
+    }
+    if ((role === "admin" || role === "superadmin") && assessment.recordType === "unit_official") {
+      res.status(403).json({ error: "Admin resmi kayıt kalemlerini düzenleyemez" }); return;
+    }
+
+    const { hasOpportunity, userDecision, decisionReason, responsible, targetReductionPercent, notes } = req.body;
+    const updates: Record<string, unknown> = { updatedAt: new Date() };
+    if (hasOpportunity !== undefined) updates.hasOpportunity = !!hasOpportunity;
+    if (userDecision !== undefined) updates.userDecision = userDecision || null;
+    if (decisionReason !== undefined) updates.decisionReason = decisionReason || null;
+    if (responsible !== undefined) updates.responsible = responsible || null;
+    if (targetReductionPercent !== undefined) updates.targetReductionPercent = targetReductionPercent ? parseFloat(targetReductionPercent) : null;
+    if (notes !== undefined) updates.notes = notes || null;
+
+    if (hasOpportunity !== undefined) {
+      const share = existingItem.consumptionSharePercent;
+      const newHasOpp = !!hasOpportunity;
+      const priority = computePriority(share, newHasOpp);
+      updates.priorityResult = priority;
+      updates.systemRecommendation = computeRecommendation(priority);
+    }
+
+    const [updated] = await db
+      .update(seuAssessmentItemsTable)
+      .set(updates)
+      .where(eq(seuAssessmentItemsTable.id, itemId))
+      .returning();
+    res.json(updated);
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Sunucu hatası" });
+  }
+});
+
 // ── DELETE /seu/assessments/:id ──────────────────────────
 router.delete("/seu/assessments/:id", requireAuth, async (req, res) => {
   try {
@@ -493,23 +548,24 @@ router.delete("/seu/assessments/:id", requireAuth, async (req, res) => {
 });
 
 // ── GET /seu/decision-items ──────────────────────────────
-// Normal kullanıcı için flat item listesi; admin de kullanabilir.
+// Normal kullanıcı için flat item listesi; hem analiz kaynaklı hem manuel itemları döner.
 router.get("/seu/decision-items", requireAuth, async (req, res) => {
   try {
     const { role, companyId: sessionCompanyId, unitId: sessionUnitId } = req.user!;
     const year = req.query.year ? parseInt(req.query.year as string) : null;
+    const unitIdFilter = req.query.unitId ? parseInt(req.query.unitId as string) : null;
 
+    // ── Analiz kaynaklı kayıtlar ───────────────────────────
     const assessmentConds = [eq(seuAssessmentsTable.companyId, sessionCompanyId)];
-
     if (role === "user" && sessionUnitId !== null) {
       assessmentConds.push(eq(seuAssessmentsTable.unitId, sessionUnitId));
       assessmentConds.push(eq(seuAssessmentsTable.recordType, "unit_official"));
+    } else if ((role === "admin" || role === "superadmin") && unitIdFilter) {
+      assessmentConds.push(eq(seuAssessmentsTable.unitId, unitIdFilter));
     }
-    if (year) {
-      assessmentConds.push(eq(seuAssessmentsTable.year, year));
-    }
+    if (year) assessmentConds.push(eq(seuAssessmentsTable.year, year));
 
-    const rows = await db
+    const analysisRows = await db
       .select({
         itemId: seuAssessmentItemsTable.id,
         assessmentId: seuAssessmentItemsTable.assessmentId,
@@ -540,7 +596,318 @@ router.get("/seu/decision-items", requireAuth, async (req, res) => {
       .where(and(...assessmentConds))
       .orderBy(desc(seuAssessmentsTable.year), desc(seuAssessmentItemsTable.consumptionSharePercent));
 
-    res.json(rows);
+    // ── Manuel kayıtlar (seuTable) ─────────────────────────
+    const manualConds = [eq(seuTable.companyId, sessionCompanyId)];
+    if (role === "user" && sessionUnitId !== null) {
+      manualConds.push(eq(seuTable.unitId, sessionUnitId));
+    } else if ((role === "admin" || role === "superadmin") && unitIdFilter) {
+      manualConds.push(eq(seuTable.unitId, unitIdFilter));
+    }
+
+    const manualRows = await db
+      .select({
+        id: seuTable.id,
+        unitId: seuTable.unitId,
+        name: seuTable.name,
+        category: seuTable.category,
+        annualKwh: seuTable.annualKwh,
+        percentage: seuTable.percentage,
+        priority: seuTable.priority,
+        targetReductionPercent: seuTable.targetReductionPercent,
+        responsible: seuTable.responsible,
+        notes: seuTable.notes,
+        createdAt: seuTable.createdAt,
+        unitName: unitsTable.name,
+      })
+      .from(seuTable)
+      .leftJoin(unitsTable, eq(seuTable.unitId, unitsTable.id))
+      .where(and(...manualConds))
+      .orderBy(seuTable.priority);
+
+    // Normalize manual rows to the same shape as analysis rows
+    const normalizedManual = manualRows.map(m => ({
+      itemId: null as number | null,
+      assessmentId: null as number | null,
+      manualId: m.id,
+      source: "manual" as const,
+      name: m.name,
+      energyTep: m.annualKwh,
+      consumptionSharePercent: m.percentage,
+      hasOpportunity: false,
+      priorityResult: m.priority,
+      systemRecommendation: "seu_candidate" as const,
+      userDecision: null as string | null,
+      decisionReason: null as string | null,
+      responsible: m.responsible,
+      targetReductionPercent: m.targetReductionPercent,
+      notes: m.notes,
+      itemUpdatedAt: m.createdAt,
+      assessmentYear: null as number | null,
+      periodStart: null as number | null,
+      periodEnd: null as number | null,
+      analysisLevel: "manual" as const,
+      recordType: "unit_official",
+      unitTotalTep: null as number | null,
+      unitId: m.unitId,
+      unitName: m.unitName,
+      category: m.category,
+    }));
+
+    const normalizedAnalysis = analysisRows.map(r => ({
+      ...r,
+      manualId: null as number | null,
+      source: "analysis" as const,
+      category: null as string | null,
+    }));
+
+    res.json([...normalizedAnalysis, ...normalizedManual]);
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Sunucu hatası" });
+  }
+});
+
+// ── GET /seu/admin/unit-summary ───────────────────────────
+// Admin için birim kıyaslama özeti
+router.get("/seu/admin/unit-summary", requireAuth, async (req, res) => {
+  try {
+    const { role, companyId: sessionCompanyId } = req.user!;
+    if (role !== "admin" && role !== "superadmin") {
+      res.status(403).json({ error: "Yetki yok" }); return;
+    }
+
+    const year = req.query.year ? parseInt(req.query.year as string) : new Date().getFullYear();
+    const recordTypeFilter = (req.query.recordType as string) || "all";
+
+    // Tüm birimler
+    const allUnits = await db
+      .select({ id: unitsTable.id, name: unitsTable.name })
+      .from(unitsTable)
+      .where(eq(unitsTable.companyId, sessionCompanyId));
+
+    // Assessments for the year
+    const assessmentConds = [
+      eq(seuAssessmentsTable.companyId, sessionCompanyId),
+      eq(seuAssessmentsTable.year, year),
+    ];
+    if (recordTypeFilter !== "all") {
+      assessmentConds.push(eq(seuAssessmentsTable.recordType, recordTypeFilter));
+    }
+
+    const assessments = await db
+      .select({
+        id: seuAssessmentsTable.id,
+        unitId: seuAssessmentsTable.unitId,
+        recordType: seuAssessmentsTable.recordType,
+        unitTotalTep: seuAssessmentsTable.unitTotalTep,
+        analysisLevel: seuAssessmentsTable.analysisLevel,
+        createdAt: seuAssessmentsTable.createdAt,
+        updatedAt: seuAssessmentsTable.updatedAt,
+      })
+      .from(seuAssessmentsTable)
+      .where(and(...assessmentConds))
+      .orderBy(desc(seuAssessmentsTable.createdAt));
+
+    const assessmentIds = assessments.map(a => a.id);
+
+    // Item counts per assessment
+    let itemDetails: Record<number, { total: number; seu: number; monitor: number; notSeu: number; topName: string | null; topShare: number }> = {};
+    if (assessmentIds.length > 0) {
+      const counts = await db
+        .select({
+          assessmentId: seuAssessmentItemsTable.assessmentId,
+          total: sql<number>`COUNT(*)`,
+          seu: sql<number>`SUM(CASE WHEN ${seuAssessmentItemsTable.userDecision} = 'accepted_as_seu' THEN 1 ELSE 0 END)`,
+          monitor: sql<number>`SUM(CASE WHEN ${seuAssessmentItemsTable.userDecision} = 'monitor' THEN 1 ELSE 0 END)`,
+          notSeu: sql<number>`SUM(CASE WHEN ${seuAssessmentItemsTable.userDecision} = 'not_seu' THEN 1 ELSE 0 END)`,
+        })
+        .from(seuAssessmentItemsTable)
+        .where(inArray(seuAssessmentItemsTable.assessmentId, assessmentIds))
+        .groupBy(seuAssessmentItemsTable.assessmentId);
+
+      const topItems = await db
+        .select({
+          assessmentId: seuAssessmentItemsTable.assessmentId,
+          name: seuAssessmentItemsTable.name,
+          share: seuAssessmentItemsTable.consumptionSharePercent,
+        })
+        .from(seuAssessmentItemsTable)
+        .where(inArray(seuAssessmentItemsTable.assessmentId, assessmentIds))
+        .orderBy(desc(seuAssessmentItemsTable.consumptionSharePercent));
+
+      const topByAssessment: Record<number, { name: string; share: number }> = {};
+      for (const t of topItems) {
+        if (!topByAssessment[t.assessmentId]) {
+          topByAssessment[t.assessmentId] = { name: t.name, share: Number(t.share) || 0 };
+        }
+      }
+
+      itemDetails = Object.fromEntries(counts.map(c => [
+        c.assessmentId,
+        {
+          total: Number(c.total) || 0,
+          seu: Number(c.seu) || 0,
+          monitor: Number(c.monitor) || 0,
+          notSeu: Number(c.notSeu) || 0,
+          topName: topByAssessment[c.assessmentId]?.name ?? null,
+          topShare: topByAssessment[c.assessmentId]?.share ?? 0,
+        },
+      ]));
+    }
+
+    // Manual items per unit
+    const manualRows = await db
+      .select({
+        unitId: seuTable.unitId,
+        count: sql<number>`COUNT(*)`,
+      })
+      .from(seuTable)
+      .where(eq(seuTable.companyId, sessionCompanyId))
+      .groupBy(seuTable.unitId);
+    const manualCountByUnit: Record<number, number> = Object.fromEntries(
+      manualRows.map(r => [r.unitId, Number(r.count) || 0])
+    );
+
+    // Group assessments by unit
+    const byUnit: Record<number, typeof assessments> = {};
+    for (const a of assessments) {
+      if (!a.unitId) continue;
+      if (!byUnit[a.unitId]) byUnit[a.unitId] = [];
+      byUnit[a.unitId].push(a);
+    }
+
+    // Company total TEP (from official assessments this year)
+    const officialAssessments = assessments.filter(a => a.recordType === "unit_official");
+    const officialByUnit: Record<number, (typeof assessments)[0]> = {};
+    for (const a of officialAssessments) {
+      if (!a.unitId) continue;
+      if (!officialByUnit[a.unitId] || a.createdAt > officialByUnit[a.unitId].createdAt) {
+        officialByUnit[a.unitId] = a;
+      }
+    }
+    const companyTotalTep = Object.values(officialByUnit).reduce((s, a) => s + (a.unitTotalTep || 0), 0);
+
+    const unitSummaries = allUnits.map(unit => {
+      const unitAssessments = byUnit[unit.id] ?? [];
+
+      // Latest per analysisLevel (for distinct views)
+      const latestByLevel: Record<string, (typeof assessments)[0]> = {};
+      for (const a of unitAssessments) {
+        const key = `${a.analysisLevel}-${a.recordType}`;
+        if (!latestByLevel[key] || a.createdAt > latestByLevel[key].createdAt) {
+          latestByLevel[key] = a;
+        }
+      }
+      const latestAssessments = Object.values(latestByLevel);
+
+      const hasOfficialAssessment = unitAssessments.some(a => a.recordType === "unit_official");
+      const officialAssessment = officialByUnit[unit.id];
+      const unitTotalTep = officialAssessment?.unitTotalTep ?? 0;
+      const companySharePercent = companyTotalTep > 0 ? Math.round((unitTotalTep / companyTotalTep) * 10000) / 100 : 0;
+
+      const totalItems = latestAssessments.reduce((s, a) => s + (itemDetails[a.id]?.total ?? 0), 0);
+      const seuCount = latestAssessments.reduce((s, a) => s + (itemDetails[a.id]?.seu ?? 0), 0);
+      const monitorCount = latestAssessments.reduce((s, a) => s + (itemDetails[a.id]?.monitor ?? 0), 0);
+      const notSeuCount = latestAssessments.reduce((s, a) => s + (itemDetails[a.id]?.notSeu ?? 0), 0);
+      const manualCount = manualCountByUnit[unit.id] ?? 0;
+
+      // Top energy group from official assessment
+      const officialItems = officialAssessment ? itemDetails[officialAssessment.id] : null;
+      const topGroupName = officialItems?.topName ?? null;
+      const topGroupShare = officialItems?.topShare ?? 0;
+
+      const lastUpdatedAt = latestAssessments.length > 0
+        ? latestAssessments.map(a => a.updatedAt).sort((a, b) => b > a ? 1 : -1)[0]
+        : null;
+
+      return {
+        unitId: unit.id,
+        unitName: unit.name,
+        unitTotalTep,
+        companySharePercent,
+        hasOfficialAssessment,
+        totalItems,
+        seuCount,
+        monitorCount,
+        notSeuCount,
+        manualCount,
+        topGroupName,
+        topGroupShare,
+        lastUpdatedAt,
+        assessmentCount: unitAssessments.length,
+      };
+    });
+
+    res.json({
+      year,
+      companyTotalTep,
+      units: unitSummaries.sort((a, b) => b.unitTotalTep - a.unitTotalTep),
+    });
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Sunucu hatası" });
+  }
+});
+
+// ── GET /seu/admin/unit-detail/:unitId ────────────────────
+// Admin için birim item detayları
+router.get("/seu/admin/unit-detail/:unitId", requireAuth, async (req, res) => {
+  try {
+    const { role, companyId: sessionCompanyId } = req.user!;
+    if (role !== "admin" && role !== "superadmin") {
+      res.status(403).json({ error: "Yetki yok" }); return;
+    }
+    const unitId = parseInt(req.params.unitId as string);
+    const year = req.query.year ? parseInt(req.query.year as string) : new Date().getFullYear();
+
+    // Official assessments for this unit/year
+    const assessments = await db
+      .select()
+      .from(seuAssessmentsTable)
+      .where(and(
+        eq(seuAssessmentsTable.companyId, sessionCompanyId),
+        eq(seuAssessmentsTable.unitId, unitId),
+        eq(seuAssessmentsTable.year, year),
+        eq(seuAssessmentsTable.recordType, "unit_official"),
+      ))
+      .orderBy(desc(seuAssessmentsTable.createdAt));
+
+    const assessmentIds = assessments.map(a => a.id);
+    let analysisItems: any[] = [];
+    if (assessmentIds.length > 0) {
+      analysisItems = await db
+        .select()
+        .from(seuAssessmentItemsTable)
+        .where(inArray(seuAssessmentItemsTable.assessmentId, assessmentIds))
+        .orderBy(desc(seuAssessmentItemsTable.consumptionSharePercent));
+    }
+
+    // Manual items for this unit
+    const manualItems = await db
+      .select()
+      .from(seuTable)
+      .where(and(eq(seuTable.companyId, sessionCompanyId), eq(seuTable.unitId, unitId)))
+      .orderBy(seuTable.priority);
+
+    res.json({
+      unitId,
+      year,
+      analysisItems: analysisItems.map(i => ({ ...i, source: "analysis" })),
+      manualItems: manualItems.map(i => ({
+        id: i.id,
+        name: i.name,
+        energyTep: i.annualKwh,
+        consumptionSharePercent: i.percentage,
+        hasOpportunity: false,
+        priorityResult: i.priority,
+        userDecision: null,
+        decisionReason: null,
+        responsible: i.responsible,
+        targetReductionPercent: i.targetReductionPercent,
+        notes: i.notes,
+        source: "manual",
+      })),
+    });
   } catch (err) {
     req.log.error(err);
     res.status(500).json({ error: "Sunucu hatası" });

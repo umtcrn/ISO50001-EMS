@@ -1,0 +1,184 @@
+ÖEK/SEU modülünde manuel kayıt görünürlüğü/düzenleme ve admin üst yönetim analiz eksiklerini düzelt. Yeni onay mekanizması, PDF/Excel export veya büyük yeni modül ekleme.
+
+Mevcut sorunlar:
+
+1. Normal kullanıcının Manuel Kayıt sekmesinden girdiği ÖEK kayıtları Karar Kayıtları / ÖEK Listesi ekranında görünmüyor.
+2. Bu nedenle firma admini kullanıcıların manuel girdiği ÖEK kayıtlarını göremiyor.
+3. Normal kullanıcı ÖEK Listesi / Karar Kayıtları ekranındaki kayıtları düzenleyemiyor.
+4. Admin Kontrol Analizi’nde yapılan analiz Tüm Birimler Özeti ekranına yansımıyor.
+5. Firma admini için üst yönetime raporlama amaçlı birimleri kendi arasında kıyaslama özelliği eksik.
+
+Beklenen düzeltmeler:
+
+1. Manuel ÖEK kayıtları Karar Kayıtları’na dahil edilmeli
+
+- Normal kullanıcının Manuel Kayıt sekmesinden girdiği kayıtlar, kullanıcının kendi birimine ait resmi karar kayıtları içinde görünmeli.
+- Manuel kayıtlar Karar Kayıtları ekranında şu etiketle ayrılmalı:
+  “Manuel Kayıt”
+- Otomatik analizden gelen kayıtlar şu etiketle ayrılmalı:
+  “Analizden Oluşturuldu”
+- Manuel kayıtlar da accepted_as_seu / not_seu / monitor karar yapısını kullanmalı.
+- Manuel kayıtta karar gerekçesi zorunlu olmalı.
+- Manuel kayıtlar da SeuAssessmentItems veya mevcut uygun ÖEK karar item yapısına bağlanmalı. Ayrı eski manuel tablo varsa, Karar Kayıtları ekranı bu kayıtları da okuyup birleştirmeli veya manuel kayıtlar yeni SEU assessment yapısına normalize edilmeli.
+- Normal kullanıcı Karar Kayıtları ekranında hem analizden gelen hem manuel girilen kayıtları birlikte görebilmeli.
+- Firma admini Birim ÖEK Kayıtları ekranında normal kullanıcıların manuel kayıtlarını da görebilmeli.
+
+2. Manuel kayıtların düzenlenmesi
+
+- Normal kullanıcı kendi birimine ait manuel ÖEK kayıtlarını düzenleyebilmeli.
+- Düzenlenebilir alanlar:
+  - ad / enerji kullanım alanı adı
+  - yıl
+  - yıllık TEP
+  - fırsat var mı
+  - kullanıcı kararı
+  - karar gerekçesi
+  - hedef azaltım %
+  - sorumlu
+  - not
+- Pay % kullanıcı tarafından elle girilmemeli.
+- Manuel kayıtta yıl ve yıllık TEP değişirse pay otomatik yeniden hesaplanmalı:
+  manualItemTep / selectedUnitYearTotalTep * 100
+- Öncelik de pay + fırsat matrisine göre otomatik yeniden hesaplanmalı.
+- Normal kullanıcı kendi birimi dışındaki manuel kayıtları düzenleyememeli.
+- Firma admini kullanıcıların resmi unit_official manuel kayıtlarını sessizce ezmemeli. Admin görüntüleyebilmeli; gerekiyorsa sadece kendi admin_review kayıtlarını düzenleyebilmeli.
+- Silme yetkisi mevcut rol kurallarına uygun olmalı. Normal kullanıcı kendi manuel kaydını silebiliyorsa silsin; admin unit_official kaydı silmesin.
+
+3. Karar Kayıtları ekranında düzenleme
+
+- Normal kullanıcı Karar Kayıtları ekranındaki kendi kayıtlarında “Düzenle” işlemi görebilmeli.
+- Analizden oluşturulan kayıt itemları için kullanıcı şu alanları düzenleyebilmeli:
+  - fırsat var mı
+  - kullanıcı kararı
+  - karar gerekçesi
+  - hedef azaltım %
+  - sorumlu
+  - not
+- Fırsat var/yok değişirse priorityResult ve systemRecommendation yeniden hesaplanmalı.
+- Kullanıcı sistem önerisinden farklı karar verirse karar gerekçesi zorunluluğu korunmalı.
+- accepted_as_seu / not_seu / monitor kararları listede görünmeye devam etmeli.
+
+4. Admin Kontrol Analizi ve Tüm Birimler Özeti ilişkisi
+
+- Admin Kontrol Analizi, seçili birim için admin_review recordType ile saklanıyorsa bu kayıt Admin Kontrol Analizi geçmişinde görünmeli.
+- Admin Kontrol Analizi sonucu Tüm Birimler Özeti’ni bozmasın; ancak admin birimleri kıyaslamak için ayrı bir üst yönetim özet ekranı görebilmeli.
+- Tüm Birimler Özeti sadece admin_review kayıtlarından ibaret olmamalı. Asıl amacı firma içindeki birimleri yıllık toplam TEP, ÖEK sayısı, izleme sayısı, ÖEK dışı sayısı, en yüksek paya sahip enerji kullanım grubu gibi alanlarla karşılaştırmak olmalı.
+
+5. Firma admini için üst yönetim birim kıyaslama ekranı
+   Tüm Birimler Özeti sekmesini üst yönetime raporlama mantığıyla geliştir.
+
+Filtreler:
+
+- yıl
+- ay aralığı, opsiyonel
+- enerji kaynağı, opsiyonel
+- sadece resmi kullanıcı kayıtları / admin kontrol analizleri / tümü seçeneği
+
+Tablo kolonları:
+
+- birim adı
+- yıllık toplam TEP
+- firma toplam TEP içindeki pay %
+- resmi ÖEK değerlendirmesi var mı?
+- toplam karar kalemi
+- ÖEK sayısı
+- İzleme sayısı
+- ÖEK Dışı sayısı
+- en yüksek TEP’li enerji kullanım grubu
+- en yüksek pay %
+- son güncelleme
+- son güncelleyen kullanıcı
+- işlem / detay
+
+Detay:
+
+- Admin birim satırına tıklayınca o birimin item detaylarını görebilmeli:
+  - enerji kullanım grubu / analiz öğesi adı
+  - TEP
+  - birim içindeki pay %
+  - fırsat
+  - öncelik
+  - karar
+  - gerekçe
+  - kaynak: Manuel Kayıt / Analizden Oluşturuldu
+- Bu detay normal kullanıcının resmi unit_official kayıtlarını ezmemeli.
+
+6. Admin kontrol analizi ile resmi kullanıcı kayıtları ayrımı
+
+- unit_official = normal kullanıcının resmi birim ÖEK kaydı
+- admin_review = adminin kontrol amaçlı analizi
+- company_summary = yönetimsel özet/kıyaslama
+- Admin Tüm Birimler Özeti ekranında bu recordType ayrımı açıkça korunmalı.
+- Admin kontrol analizi yaptığında unit_official kayıtlar değişmemeli.
+- Admin kontrol analizinin item detayları ayrıca görülebilmeli.
+
+7. Backend/API
+   Gerekirse mevcut endpointleri genişlet:
+
+- GET /api/seu/decision-items?year=...
+  - Normal kullanıcı için kendi unitId kapsamındaki tüm karar itemlarını dönmeli.
+  - Manuel ve analiz kaynaklı kayıtları birlikte dönebilmeli.
+- GET /api/seu/admin/unit-summary?year=...
+  - Admin için birim kıyaslama özetini dönmeli.
+- PATCH /api/seu/decision-items/:itemId
+  - Normal kullanıcı kendi birimi kapsamındaki itemı düzenleyebilmeli.
+  - Fırsat/karar/gerekçe/hedef/sorumlu/not güncellenebilmeli.
+- Manuel kayıt eski endpointte kalıyorsa, Karar Kayıtları ekranına dahil olacak şekilde frontend/backend birleşik veri sağlamalı.
+
+8. UI
+   Normal kullanıcı:
+
+- Karar Kayıtları ekranında yıl bazlı karar listesi görünmeli.
+- Birim kartı ana görünümde gösterilmemeli.
+- Kayıt kaynağı görünmeli:
+  - Manuel Kayıt
+  - Analizden Oluşturuldu
+- Her satırda uygun ise Düzenle butonu olmalı.
+
+Firma admini:
+
+- Birim ÖEK Kayıtları sekmesinde kullanıcıların manuel ve analiz kaynaklı resmi kayıtlarını görebilmeli.
+- Admin Kontrol Analizi sekmesinde yaptığı analizlerin geçmişi/detayı görünmeli.
+- Tüm Birimler Özeti sekmesi üst yönetime raporlama/kıyaslama amaçlı geliştirilmeli.
+- Birimler yıllık TEP’e göre sıralanabilmeli.
+- Birim detayında hangi enerji kullanım gruplarının ÖEK/İzle/ÖEK Dışı olduğu görülebilmeli.
+
+9. Veri bütünlüğü ve güvenlik
+
+- Normal kullanıcı başka unitId kayıtlarını görememeli/düzenleyememeli.
+- Admin sadece kendi companyId içindeki birimleri görebilmeli.
+- Admin unit_official kayıtları ezememeli.
+- Tenant güvenliği korunmalı.
+- Mevcut migrationları bozma.
+- Mümkünse yeni migration ekleme; mevcut seu_assessments ve seu_assessment_items yapısını kullan.
+- Kolon eksikliği varsa minimum migration ekle.
+- Onay mekanizması ekleme.
+- PDF/Excel export ekleme.
+- TypeScript/build hatası bırakma.
+
+Kontrol edilecek dosyalar:
+
+- artifacts/api-server/src/routes/seu-assessment.ts
+- artifacts/ems-dashboard/src/components/seu/SeuAssessmentList.tsx
+- artifacts/ems-dashboard/src/components/seu/SeuAnalysisTab.tsx
+- artifacts/ems-dashboard/src/components/seu/SeuAdminTabs.tsx
+- artifacts/ems-dashboard/src/pages/Seu.tsx
+- manuel kayıt componenti varsa ilgili dosya
+
+Test:
+
+1. Normal kullanıcı manuel ÖEK kaydı girsin.
+2. Manuel kayıt Karar Kayıtları ekranında görünsün.
+3. Manuel kayıt “Manuel Kayıt” etiketiyle ayrılsın.
+4. Normal kullanıcı manuel kaydı düzenleyebilsin.
+5. Normal kullanıcı analizden gelen karar itemını düzenleyebilsin.
+6. Firma admini normal kullanıcının manuel ve analiz kaynaklı kayıtlarını görebilsin.
+7. Firma admini unit_official kaydı ezemesin.
+8. Admin Kontrol Analizi sonucu admin_review olarak görünsün.
+9. Tüm Birimler Özeti sekmesinde birimler yıllık TEP, ÖEK sayısı, İzleme sayısı, ÖEK Dışı sayısı ve firma payı ile kıyaslanabilsin.
+10. Tüm Birimler Özeti detayında enerji kullanım grubu kırılımları görünsün.
+11. Build kontrolleri çalışsın:
+    pnpm --filter @workspace/api-server build
+    pnpm --filter @workspace/ems-dashboard build
+
+Sonunda değişen dosyaları ve test sonucunu kısa özetle.
