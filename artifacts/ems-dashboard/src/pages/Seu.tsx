@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/context/AuthContext";
 import { useUnit } from "@/context/UnitContext";
 import { useCompany } from "@/context/CompanyContext";
@@ -35,34 +35,71 @@ interface SeuForm {
 }
 const EMPTY: SeuForm = { name: "", category: "uretim", annualKwh: "", percentage: "", priority: "1", targetReductionPercent: "", responsible: "", notes: "" };
 
+function computeManualPriority(share: number, hasOpp: boolean): number {
+  if (share >= 20) return hasOpp ? 1 : 2;
+  if (share >= 10) return hasOpp ? 2 : 3;
+  if (share >= 5) return hasOpp ? 3 : 4;
+  return hasOpp ? 4 : 5;
+}
+
 function ManualSeuList() {
   const qc = useQueryClient();
   const { toast } = useToast();
   const { unitId } = useUnit();
   const { companyId } = useCompany();
-  const { user } = useAuth();
+  const { token, user } = useAuth();
   const isAdmin = user?.role === "admin" || user?.role === "superadmin";
   const unitParam = unitId !== null ? { unitId } : companyId !== null ? { companyId } : undefined;
+  const currentYear = new Date().getFullYear();
 
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState<SeuForm>(EMPTY);
+  const [formYear, setFormYear] = useState(currentYear);
+  const [hasOpportunity, setHasOpportunity] = useState(false);
 
   const { data: items, isLoading } = useListSeu(unitParam, { query: { queryKey: getListSeuQueryKey(unitParam) } });
   const createSeu = useCreateSeu();
   const updateSeu = useUpdateSeu();
   const deleteSeu = useDeleteSeu();
 
-  function openCreate() { setEditingId(null); setForm(EMPTY); setOpen(true); }
+  const effectiveUnitId = isAdmin ? null : (unitId ?? null);
+  const { data: kpiData, isFetching: kpiFetching } = useQuery({
+    queryKey: ["manual-seu-kpi", formYear, effectiveUnitId],
+    queryFn: async () => {
+      const p = new URLSearchParams({ year: String(formYear) });
+      if (effectiveUnitId !== null) p.set("unitId", String(effectiveUnitId));
+      const res = await fetch(`/api/dashboard/kpi?${p}`, { headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) return null;
+      return res.json();
+    },
+    enabled: open && effectiveUnitId !== null,
+    staleTime: 60_000,
+  });
+
+  const totalTep: number = kpiData?.totalTep ?? 0;
+  const annualTep = parseFloat(form.annualKwh) || 0;
+  const autoPercentage = totalTep > 0 ? Math.round((annualTep / totalTep) * 10000) / 100 : 0;
+  const autoPriority = computeManualPriority(autoPercentage, hasOpportunity);
+
+  function openCreate() { setEditingId(null); setForm(EMPTY); setHasOpportunity(false); setFormYear(currentYear); setOpen(true); }
   function openEdit(item: any) {
     setEditingId(item.id);
     setForm({ name: item.name, category: item.category, annualKwh: item.annualKwh.toString(), percentage: item.percentage.toString(), priority: item.priority.toString(), targetReductionPercent: item.targetReductionPercent?.toString() ?? "", responsible: item.responsible ?? "", notes: item.notes ?? "" });
+    setHasOpportunity(false);
     setOpen(true);
   }
 
   function handleSave() {
     if (!form.name || !form.category) { toast({ title: "Zorunlu alanlar eksik", variant: "destructive" }); return; }
-    const data: any = { name: form.name, category: form.category, annualKwh: parseFloat(form.annualKwh) || 0, percentage: parseFloat(form.percentage) || 0, priority: parseInt(form.priority) || 1 };
+    if (!annualTep) { toast({ title: "TEP tüketimi girilmedi", variant: "destructive" }); return; }
+    const autoPerc = totalTep > 0 ? autoPercentage : (parseFloat(form.percentage) || 0);
+    const data: any = {
+      name: form.name, category: form.category,
+      annualKwh: annualTep,
+      percentage: autoPerc,
+      priority: autoPriority,
+    };
     if (form.targetReductionPercent) data.targetReductionPercent = parseFloat(form.targetReductionPercent);
     if (form.responsible) data.responsible = form.responsible;
     if (form.notes) data.notes = form.notes;
@@ -84,7 +121,7 @@ function ManualSeuList() {
     <div className="space-y-3">
       <div className="flex items-center gap-2 p-3 rounded-md border border-amber-500/20 bg-amber-500/5 text-sm text-amber-300">
         <Info className="h-4 w-4 shrink-0" />
-        <span>Bu kayıtlar tüketim analizinden otomatik oluşturulmadı. ISO denetimi için karar gerekçesi girmeniz önerilir.</span>
+        <span>Bu kayıtlar tüketim analizinden otomatik oluşturulmadı. ISO denetimi için ÖEK Analizi sekmesini kullanmanız önerilir.</span>
       </div>
 
       <div className="flex justify-end">
@@ -99,7 +136,7 @@ function ManualSeuList() {
           <p className="text-sm">Manuel ÖEK kaydı yok</p>
         </CardContent></Card>
       ) : (
-        sorted.map((item: any, idx: number) => (
+        sorted.map((item: any) => (
           <Card key={item.id} className="group">
             <CardContent className="p-4">
               <div className="flex items-start justify-between gap-3">
@@ -110,8 +147,8 @@ function ManualSeuList() {
                     <Badge variant="outline" className="text-xs">Öncelik {item.priority}</Badge>
                   </div>
                   <div className="flex items-center gap-4 mt-1 text-xs text-muted-foreground">
-                    <span className="font-mono text-foreground">{Math.round(item.annualKwh).toLocaleString("tr-TR")} kWh/yıl</span>
-                    <span className="text-teal-400">%{item.percentage}</span>
+                    <span className="font-mono text-foreground">{item.annualKwh.toFixed(4)} TEP/yıl</span>
+                    <span className="text-teal-400">%{item.percentage.toFixed(1)}</span>
                     {item.targetReductionPercent && <span className="text-amber-400">Hedef: -%{item.targetReductionPercent}</span>}
                   </div>
                 </div>
@@ -142,22 +179,47 @@ function ManualSeuList() {
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label>Öncelik</Label>
-                <Select value={form.priority} onValueChange={v => setForm(f => ({ ...f, priority: v }))}>
+                <Label>Yıl</Label>
+                <Select value={String(formYear)} onValueChange={v => setFormYear(parseInt(v))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>{[1,2,3,4,5].map(n => <SelectItem key={n} value={n.toString()}>{n}. Öncelik</SelectItem>)}</SelectContent>
+                  <SelectContent>
+                    {[currentYear, currentYear - 1, currentYear - 2, currentYear - 3].map(y => (
+                      <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+                    ))}
+                  </SelectContent>
                 </Select>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label>Yıllık Tüketim (kWh)</Label>
-                <Input type="number" value={form.annualKwh} onChange={e => setForm(f => ({ ...f, annualKwh: e.target.value }))} placeholder="0" />
+                <Label>Yıllık TEP Tüketimi *</Label>
+                <Input type="number" value={form.annualKwh} onChange={e => setForm(f => ({ ...f, annualKwh: e.target.value }))} placeholder="0.0000" step="0.0001" />
               </div>
               <div className="space-y-1.5">
-                <Label>Pay (%)</Label>
-                <Input type="number" value={form.percentage} onChange={e => setForm(f => ({ ...f, percentage: e.target.value }))} placeholder="0" />
+                <Label className="text-xs">Pay % (Otomatik)</Label>
+                <div className="relative">
+                  <Input
+                    readOnly
+                    value={totalTep > 0 ? `${autoPercentage.toFixed(1)}% (${totalTep.toFixed(2)} TEP toplam)` : kpiFetching ? "Hesaplanıyor…" : "Toplam TEP bulunamadı"}
+                    className="bg-muted/30 text-xs pr-2 cursor-not-allowed"
+                  />
+                </div>
+                {!kpiFetching && totalTep === 0 && open && effectiveUnitId !== null && (
+                  <p className="text-xs text-amber-400 mt-0.5">Bu yıl ve birim için toplam TEP bulunamadı. Tüketim girişlerini kontrol edin.</p>
+                )}
               </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setHasOpportunity(v => !v)}
+                className={`px-3 py-1.5 rounded-md text-sm font-medium border transition-colors ${hasOpportunity ? "border-green-500/40 bg-green-500/10 text-green-400" : "border-border bg-muted/30 text-muted-foreground"}`}
+              >
+                İyileştirme Fırsatı: {hasOpportunity ? "Var" : "Yok"}
+              </button>
+              <span className="text-xs text-muted-foreground">
+                Otomatik Öncelik: <strong className="text-foreground">{autoPriority}</strong>
+              </span>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
@@ -201,7 +263,7 @@ export default function Seu() {
         <Tabs defaultValue="analysis">
           <TabsList className="mb-4">
             <TabsTrigger value="analysis">ÖEK Analizi</TabsTrigger>
-            <TabsTrigger value="list">ÖEK Listesi</TabsTrigger>
+            <TabsTrigger value="list">Karar Kayıtları</TabsTrigger>
             <TabsTrigger value="manual">Manuel Kayıt</TabsTrigger>
             <TabsTrigger value="method">Metot</TabsTrigger>
           </TabsList>

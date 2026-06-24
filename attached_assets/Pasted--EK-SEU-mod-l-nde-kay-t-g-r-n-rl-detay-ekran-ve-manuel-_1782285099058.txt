@@ -1,0 +1,167 @@
+ÖEK/SEU modülünde kayıt görünürlüğü, detay ekranı ve manuel kayıt hesaplama eksiklerini düzelt. Yeni büyük özellik ekleme, mevcut yapıyı iyileştir.
+
+Mevcut sorunlar:
+
+1. ÖEK Analizi sonrası kullanıcı kararları eksik listeleniyor
+
+* Kullanıcı analizde accepted_as_seu, not_seu veya monitor kararlarını verebiliyor.
+* Ancak ÖEK Listesi sekmesinde sadece ÖEK kabul edilenler görünüyor.
+* ÖEK dışı veya İzlemeye al kararları görünmüyor.
+* Kullanıcının karar gerekçesi/açıklaması görülemiyor.
+
+Beklenen davranış:
+
+* ÖEK Listesi sadece accepted_as_seu kayıtlarını değil, analizde karar verilmiş tüm item satırlarını gösterebilmeli.
+* Liste veya detay ekranında şu kararlar görünmeli:
+
+  * accepted_as_seu = ÖEK
+  * not_seu = ÖEK Dışı
+  * monitor = İzle
+* Her item için decisionReason, notes, responsible, targetReductionPercent alanları görülebilmeli.
+* ÖEK dışı veya İzle kararları da kaybolmamalı; çünkü ISO 50001 açısından karar gerekçesi izlenebilir olmalıdır.
+* Liste ekranında filtre ekle:
+
+  * Tümü
+  * ÖEK
+  * ÖEK Dışı
+  * İzle
+* Varsayılan filtre “Tümü” olabilir veya üstte özet kartları olabilir:
+
+  * Toplam kalem
+  * ÖEK
+  * İzle
+  * ÖEK dışı
+
+2. Assessment kartında detay eksik
+   Şu an kartta sadece örnek olarak:
+
+* Birim adı
+* yıl
+* resmi
+* dönem
+* seviye
+* toplam TEP
+* kalem sayısı
+* ÖEK sayısı
+  görünüyor.
+
+Beklenen davranış:
+
+* Her assessment kartı tıklanabilir olmalı veya “Detay” butonu olmalı.
+* Detay açıldığında assessment item satırları listelenmeli.
+* Detayda hangi enerji kullanım gruplarının ÖEK olduğu açıkça görünmeli.
+* Detay tablosunda şu kolonlar olmalı:
+
+  * Enerji kullanım grubu / analiz öğesi adı
+  * TEP tüketim
+  * Pay %
+  * Fırsat var mı?
+  * Öncelik
+  * Sistem önerisi
+  * Kullanıcı kararı
+  * Karar gerekçesi
+  * Hedef azaltım %
+  * Sorumlu
+  * Not
+* Detay ekranında accepted_as_seu, not_seu ve monitor satırlarının tamamı gösterilmeli.
+* Kullanıcı isterse karar tipine göre filtreleyebilmeli.
+
+3. Admin kontrol analizi ve tüm birimler özeti detayı eksik
+
+* Admin analiz yaptığında sonuç Tüm Birimler Özeti tarafına düşüyor.
+* Ancak detayda hangi enerji kullanım gruplarının ÖEK / ÖEK dışı / izlenecek olduğu görünmüyor.
+
+Beklenen davranış:
+
+* Admin için Birim ÖEK Kayıtları, Admin Kontrol Analizi ve Tüm Birimler Özeti ekranlarında detay erişimi olmalı.
+* Admin bir assessment kartına tıkladığında item detaylarını görebilmeli.
+* Admin kontrol analizi, normal kullanıcının unit_official kaydını ezmemeli.
+* Admin review kayıtları detayda recordType=admin_review olarak belli olmalı.
+* Tüm Birimler Özeti yönetimsel karşılaştırma olabilir; fakat birim detayına girildiğinde o birimin enerji kullanım grubu kırılımı görülebilmeli.
+
+4. Liste endpointi item detaylarını desteklemeli
+   Kontrol et:
+
+* GET /api/seu/assessments sadece üst kayıtları dönüyorsa, detay için GET /api/seu/assessments/:id kullanılmalı.
+* Frontend detay açıldığında ilgili assessment item kayıtlarını çekmeli.
+* Eğer liste ekranında özet sayılar yanlışsa backend veya frontend hesaplaması düzeltilmeli:
+
+  * totalItems
+  * seuCount
+  * monitorCount
+  * notSeuCount
+* ÖEK sayısı sadece accepted_as_seu item sayısı olmalı.
+* Kalem sayısı tüm item sayısı olmalı.
+
+5. Manuel kayıt akışı düzeltilmeli
+   Mevcut manuel kayıtta kullanıcı yıllık tüketim ve toplam payı elle girebiliyor. Bu doğru değil.
+
+Beklenen manuel kayıt davranışı:
+
+* Kullanıcı önce yıl seçmeli.
+* Normal kullanıcı için birim otomatik kendi unitId olmalı.
+* Admin manuel kayıt giriyorsa birim seçmeli.
+* Kullanıcı yıllık tüketimi TEP cinsinden girmeli.
+* Toplam tüketimdeki pay kullanıcı tarafından elle girilmemeli.
+* Sistem seçilen birim + yıl için toplam TEP tüketimini consumption kayıtlarından hesaplamalı.
+* Pay otomatik hesaplanmalı:
+  manualItemTep / selectedUnitYearTotalTep * 100
+* Eğer seçilen birim + yıl için toplam TEP bulunamazsa kullanıcıya uyarı göster:
+  “Bu yıl ve birim için toplam TEP tüketimi bulunamadı. Manuel ÖEK payı hesaplanamaz.”
+* Manuel kayıtta da karar alanı olmalı:
+
+  * accepted_as_seu
+  * not_seu
+  * monitor
+* Manuel kayıtta karar gerekçesi zorunlu olmalı.
+* Manuel kayıtta “Bu kayıt tüketim analizinden otomatik oluşturulmadı” uyarısı korunmalı.
+* Manuel kayıtta priorityResult yine TEP payı + fırsat var/yok matrisine göre otomatik hesaplanmalı.
+* Manuel kayıtta toplam tüketimdeki pay readonly gösterilmeli.
+
+6. UI metinleri
+
+* “ÖEK Listesi” sadece ÖEK olanları çağrıştırıyorsa başlık şu olabilir:
+  “ÖEK Karar Kayıtları”
+  veya sekme içinde filtrelerle:
+  “Tüm Kararlar / ÖEK / İzle / ÖEK Dışı”
+* Assessment kartındaki “1 ÖEK” bilgisinin yanında mümkünse:
+  “2 kalem · 1 ÖEK · 1 İzle · 0 ÖEK Dışı”
+  gibi özet göster.
+
+Teknik şartlar:
+
+* Yeni onay mekanizması ekleme.
+* PDF/Excel export ekleme.
+* Yeni büyük tablo/migration ekleme; mevcut seu_assessments ve seu_assessment_items tabloları yeterliyse onları kullan.
+* Eğer kolon eksikse minimum migration ekle, ama önce mevcut alanları kullanmayı dene.
+* Tenant güvenliğini bozma.
+* Normal kullanıcı başka unitId kayıtlarını görememeli.
+* Admin sadece kendi companyId içindeki kayıtları görebilmeli.
+* Admin unit_official kayıtları ezememeli.
+* TypeScript/build hatası bırakma.
+
+Kontrol edilmesi gereken dosyalar:
+
+* artifacts/api-server/src/routes/seu-assessment.ts
+* artifacts/ems-dashboard/src/pages/Seu.tsx
+* artifacts/ems-dashboard/src/components/seu/SeuAssessmentList.tsx
+* artifacts/ems-dashboard/src/components/seu/SeuAnalysisTab.tsx
+* artifacts/ems-dashboard/src/components/seu/SeuAdminTabs.tsx
+* gerekiyorsa manuel kayıt componenti
+
+Düzeltmeden sonra test et:
+
+1. Normal kullanıcı ÖEK analizi yapsın.
+2. Bir satırı ÖEK, bir satırı İzle veya ÖEK Dışı seçsin.
+3. Kaydet.
+4. ÖEK Listesi / ÖEK Karar Kayıtları sekmesinde tüm kararlar görünsün.
+5. Kart detayına girince enerji kullanım grubu bazlı item detayları görünsün.
+6. Karar gerekçeleri görünsün.
+7. Admin kullanıcı aynı kayıtları görebilsin ama unit_official kaydı ezemesin.
+8. Admin kontrol analizi detayında item kırılımları görünsün.
+9. Manuel kayıtta yıl seçilsin, TEP girilsin, pay otomatik hesaplansın.
+10. Build kontrolleri çalışsın:
+    pnpm --filter @workspace/api-server build
+    pnpm --filter @workspace/ems-dashboard build
+
+Sonunda değişen dosyaları ve test sonuçlarını kısa özetle.

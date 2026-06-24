@@ -247,20 +247,22 @@ router.get("/seu/assessments", requireAuth, async (req, res) => {
       .orderBy(desc(seuAssessmentsTable.createdAt));
 
     const ids = assessments.map(a => a.id);
-    let itemCounts: Record<number, { total: number; seu: number }> = {};
+    let itemCounts: Record<number, { total: number; seu: number; monitor: number; notSeu: number }> = {};
     if (ids.length > 0) {
       const counts = await db
         .select({
           assessmentId: seuAssessmentItemsTable.assessmentId,
           total: sql<number>`COUNT(*)`,
-          seu: sql<number>`SUM(CASE WHEN ${seuAssessmentItemsTable.userDecision} = 'accepted_as_seu' OR (${seuAssessmentItemsTable.userDecision} IS NULL AND ${seuAssessmentItemsTable.systemRecommendation} = 'seu_candidate') THEN 1 ELSE 0 END)`,
+          seu: sql<number>`SUM(CASE WHEN ${seuAssessmentItemsTable.userDecision} = 'accepted_as_seu' THEN 1 ELSE 0 END)`,
+          monitor: sql<number>`SUM(CASE WHEN ${seuAssessmentItemsTable.userDecision} = 'monitor' THEN 1 ELSE 0 END)`,
+          notSeu: sql<number>`SUM(CASE WHEN ${seuAssessmentItemsTable.userDecision} = 'not_seu' THEN 1 ELSE 0 END)`,
         })
         .from(seuAssessmentItemsTable)
         .where(inArray(seuAssessmentItemsTable.assessmentId, ids))
         .groupBy(seuAssessmentItemsTable.assessmentId);
       itemCounts = Object.fromEntries(counts.map(c => [
         c.assessmentId,
-        { total: Number(c.total) || 0, seu: Number(c.seu) || 0 },
+        { total: Number(c.total) || 0, seu: Number(c.seu) || 0, monitor: Number(c.monitor) || 0, notSeu: Number(c.notSeu) || 0 },
       ]));
     }
 
@@ -268,6 +270,8 @@ router.get("/seu/assessments", requireAuth, async (req, res) => {
       ...a,
       itemCount: itemCounts[a.id]?.total ?? 0,
       seuCount: itemCounts[a.id]?.seu ?? 0,
+      monitorCount: itemCounts[a.id]?.monitor ?? 0,
+      notSeuCount: itemCounts[a.id]?.notSeu ?? 0,
     })));
   } catch (err) {
     req.log.error(err);
