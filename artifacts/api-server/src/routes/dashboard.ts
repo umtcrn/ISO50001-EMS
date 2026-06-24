@@ -164,7 +164,7 @@ router.get("/dashboard/seu-breakdown", requireAuth, async (req, res) => {
         byMeter[key].kwh += r.kwh;
       }
       const total = Object.values(byMeter).reduce((a, b) => a + b.kwh, 0);
-      res.json(
+      return res.json(
         Object.entries(byMeter)
           .sort((a, b) => b[1].kwh - a[1].kwh)
           .map(([name, v]) => ({
