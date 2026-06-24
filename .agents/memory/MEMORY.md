@@ -4,3 +4,4 @@
 - [EMS Risk Notes feature](ems-risk-notes.md) — riskNotesTable added with cascade FK; notes returned embedded in GET /risks; admin-only PATCH/DELETE note endpoints
 - [EMS MGM Degree Day Pool](ems-mgm-pool.md) — Global HDD/CDD pool seeded at startup; consumption POST auto-lookups from pool; snapshot stored in weatherStationName/Note columns
 - [Drizzle Migration When Ordering](ems-drizzle-when-ordering.md) — migrate() skips if folderMillis ≤ max(created_at); new migrations need when > all existing when values
+- [EMS SEU Assessment Module](ems-seu-assessment.md) — seuAssessmentsTable + seuAssessmentItemsTable (migration 0008); analyze endpoint groups consumption by 5 levels; role-based save (unit_official vs admin_review); frontend tabbed UI in components/seu/

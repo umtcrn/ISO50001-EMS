@@ -1,0 +1,476 @@
+import { Router } from "express";
+import {
+  db,
+  consumptionTable,
+  metersTable,
+  energyUseGroupsTable,
+  subUnitsTable,
+  energySourcesTable,
+  unitsTable,
+  seuAssessmentsTable,
+  seuAssessmentItemsTable,
+} from "@workspace/db";
+import { eq, and, gte, lte, sql, desc } from "drizzle-orm";
+import { requireAuth } from "../middlewares/auth.js";
+
+const router = Router();
+
+function computePriority(share: number, hasOpportunity: boolean): number | null {
+  if (share >= 20) return hasOpportunity ? 1 : 2;
+  if (share >= 10) return hasOpportunity ? 2 : 3;
+  if (share >= 5) return hasOpportunity ? 3 : 4;
+  if (hasOpportunity) return 4;
+  return null;
+}
+
+function computeRecommendation(priority: number | null): "seu_candidate" | "not_seu" {
+  return priority !== null ? "seu_candidate" : "not_seu";
+}
+
+// ── GET /seu/analyze ─────────────────────────────────────
+router.get("/seu/analyze", requireAuth, async (req, res) => {
+  try {
+    const { role, companyId: sessionCompanyId, unitId: sessionUnitId } = req.user!;
+    const year = parseInt(req.query.year as string) || new Date().getFullYear();
+    const monthStart = parseInt(req.query.monthStart as string) || 1;
+    const monthEnd = parseInt(req.query.monthEnd as string) || 12;
+    const analysisLevel = (req.query.analysisLevel as string) || "energyUseGroup";
+    const energySourceId = req.query.energySourceId ? parseInt(req.query.energySourceId as string) : null;
+
+    let resolvedUnitId: number | null = null;
+    if (role === "user" && sessionUnitId !== null) {
+      resolvedUnitId = sessionUnitId;
+    } else if (role === "admin" || role === "superadmin") {
+      resolvedUnitId = req.query.unitId ? parseInt(req.query.unitId as string) : null;
+    }
+
+    if (!resolvedUnitId) {
+      res.status(400).json({ error: "Birim seçilmedi" });
+      return;
+    }
+
+    const baseConditions = [
+      eq(consumptionTable.companyId, sessionCompanyId),
+      eq(metersTable.unitId, resolvedUnitId),
+      eq(consumptionTable.year, year),
+      gte(consumptionTable.month, monthStart),
+      lte(consumptionTable.month, monthEnd),
+    ];
+    if (energySourceId) baseConditions.push(eq(metersTable.energySourceId, energySourceId));
+    const whereClause = and(...baseConditions);
+
+    type RawRow = {
+      groupId: number | null;
+      groupName: string | null;
+      hasOpportunity: boolean | null;
+      energyTep: number;
+      missingCount: number;
+      energyUseGroupId?: number | null;
+      meterId?: number | null;
+      subUnitId?: number | null;
+      energySourceId?: number | null;
+    };
+
+    let rawRows: RawRow[] = [];
+
+    if (analysisLevel === "meter") {
+      const rows = await db
+        .select({
+          groupId: metersTable.id,
+          groupName: metersTable.name,
+          energyTep: sql<number>`COALESCE(SUM(${consumptionTable.tep}), 0)`,
+          missingCount: sql<number>`SUM(CASE WHEN ${consumptionTable.tep} = 0 THEN 1 ELSE 0 END)`,
+        })
+        .from(consumptionTable)
+        .innerJoin(metersTable, eq(consumptionTable.meterId, metersTable.id))
+        .where(whereClause)
+        .groupBy(metersTable.id, metersTable.name)
+        .orderBy(sql`SUM(${consumptionTable.tep}) DESC NULLS LAST`);
+      rawRows = rows.map(r => ({
+        groupId: r.groupId, groupName: r.groupName, hasOpportunity: false,
+        energyTep: Number(r.energyTep) || 0, missingCount: Number(r.missingCount) || 0,
+        meterId: r.groupId,
+      }));
+    } else if (analysisLevel === "subUnit") {
+      const rows = await db
+        .select({
+          groupId: subUnitsTable.id,
+          groupName: subUnitsTable.name,
+          energyTep: sql<number>`COALESCE(SUM(${consumptionTable.tep}), 0)`,
+          missingCount: sql<number>`SUM(CASE WHEN ${consumptionTable.tep} = 0 THEN 1 ELSE 0 END)`,
+        })
+        .from(consumptionTable)
+        .innerJoin(metersTable, eq(consumptionTable.meterId, metersTable.id))
+        .leftJoin(subUnitsTable, eq(metersTable.subUnitId, subUnitsTable.id))
+        .where(whereClause)
+        .groupBy(subUnitsTable.id, subUnitsTable.name)
+        .orderBy(sql`SUM(${consumptionTable.tep}) DESC NULLS LAST`);
+      rawRows = rows.map(r => ({
+        groupId: r.groupId, groupName: r.groupName, hasOpportunity: false,
+        energyTep: Number(r.energyTep) || 0, missingCount: Number(r.missingCount) || 0,
+        subUnitId: r.groupId,
+      }));
+    } else if (analysisLevel === "energySource") {
+      const rows = await db
+        .select({
+          groupId: energySourcesTable.id,
+          groupName: energySourcesTable.name,
+          energyTep: sql<number>`COALESCE(SUM(${consumptionTable.tep}), 0)`,
+          missingCount: sql<number>`SUM(CASE WHEN ${consumptionTable.tep} = 0 THEN 1 ELSE 0 END)`,
+        })
+        .from(consumptionTable)
+        .innerJoin(metersTable, eq(consumptionTable.meterId, metersTable.id))
+        .leftJoin(energySourcesTable, eq(metersTable.energySourceId, energySourcesTable.id))
+        .where(whereClause)
+        .groupBy(energySourcesTable.id, energySourcesTable.name)
+        .orderBy(sql`SUM(${consumptionTable.tep}) DESC NULLS LAST`);
+      rawRows = rows.map(r => ({
+        groupId: r.groupId, groupName: r.groupName, hasOpportunity: false,
+        energyTep: Number(r.energyTep) || 0, missingCount: Number(r.missingCount) || 0,
+        energySourceId: r.groupId,
+      }));
+    } else if (analysisLevel === "unit") {
+      const [unitInfo] = await db.select({ name: unitsTable.name }).from(unitsTable).where(eq(unitsTable.id, resolvedUnitId));
+      const [totals] = await db
+        .select({
+          energyTep: sql<number>`COALESCE(SUM(${consumptionTable.tep}), 0)`,
+          missingCount: sql<number>`SUM(CASE WHEN ${consumptionTable.tep} = 0 THEN 1 ELSE 0 END)`,
+        })
+        .from(consumptionTable)
+        .innerJoin(metersTable, eq(consumptionTable.meterId, metersTable.id))
+        .where(whereClause);
+      rawRows = [{
+        groupId: resolvedUnitId, groupName: unitInfo?.name ?? "Birim", hasOpportunity: false,
+        energyTep: Number(totals?.energyTep) || 0, missingCount: Number(totals?.missingCount) || 0,
+      }];
+    } else {
+      // Default: energyUseGroup
+      const rows = await db
+        .select({
+          groupId: energyUseGroupsTable.id,
+          groupName: energyUseGroupsTable.name,
+          hasOpportunity: energyUseGroupsTable.isSeuCandidate,
+          energyTep: sql<number>`COALESCE(SUM(${consumptionTable.tep}), 0)`,
+          missingCount: sql<number>`SUM(CASE WHEN ${consumptionTable.tep} = 0 THEN 1 ELSE 0 END)`,
+        })
+        .from(consumptionTable)
+        .innerJoin(metersTable, eq(consumptionTable.meterId, metersTable.id))
+        .leftJoin(energyUseGroupsTable, eq(metersTable.energyUseGroupId, energyUseGroupsTable.id))
+        .where(whereClause)
+        .groupBy(energyUseGroupsTable.id, energyUseGroupsTable.name, energyUseGroupsTable.isSeuCandidate)
+        .orderBy(sql`SUM(${consumptionTable.tep}) DESC NULLS LAST`);
+      rawRows = rows.map(r => ({
+        groupId: r.groupId, groupName: r.groupName, hasOpportunity: r.hasOpportunity ?? false,
+        energyTep: Number(r.energyTep) || 0, missingCount: Number(r.missingCount) || 0,
+        energyUseGroupId: r.groupId,
+      }));
+    }
+
+    const unitTotalTep = rawRows.reduce((sum, r) => sum + r.energyTep, 0);
+    const totalMissingTep = rawRows.reduce((sum, r) => sum + r.missingCount, 0);
+
+    const items = rawRows.map(r => {
+      const share = unitTotalTep > 0 ? (r.energyTep / unitTotalTep) * 100 : 0;
+      const hasOpp = r.hasOpportunity ?? false;
+      const priority = computePriority(share, hasOpp);
+      return {
+        groupId: r.groupId,
+        name: r.groupName ?? "Tanımlanmamış",
+        analysisLevel,
+        energyTep: r.energyTep,
+        consumptionSharePercent: Math.round(share * 100) / 100,
+        hasOpportunity: hasOpp,
+        priorityResult: priority,
+        systemRecommendation: computeRecommendation(priority),
+        energyUseGroupId: r.energyUseGroupId ?? null,
+        meterId: r.meterId ?? null,
+        subUnitId: r.subUnitId ?? null,
+        energySourceId: r.energySourceId ?? null,
+      };
+    });
+
+    res.json({
+      unitId: resolvedUnitId,
+      year,
+      periodStart: monthStart,
+      periodEnd: monthEnd,
+      analysisLevel,
+      unitTotalTep,
+      missingTepWarning: totalMissingTep > 0,
+      missingTepCount: totalMissingTep,
+      items,
+    });
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Analiz hesaplanamadı" });
+  }
+});
+
+// ── GET /seu/assessments ─────────────────────────────────
+router.get("/seu/assessments", requireAuth, async (req, res) => {
+  try {
+    const { role, companyId: sessionCompanyId, unitId: sessionUnitId } = req.user!;
+    const unitId = req.query.unitId ? parseInt(req.query.unitId as string) : null;
+    const year = req.query.year ? parseInt(req.query.year as string) : null;
+    const recordType = (req.query.recordType as string) || null;
+
+    const conds = [eq(seuAssessmentsTable.companyId, sessionCompanyId)];
+
+    if (role === "user" && sessionUnitId !== null) {
+      conds.push(eq(seuAssessmentsTable.unitId, sessionUnitId));
+      conds.push(eq(seuAssessmentsTable.recordType, "unit_official"));
+    } else if (role === "admin" || role === "superadmin") {
+      if (unitId) conds.push(eq(seuAssessmentsTable.unitId, unitId));
+      if (recordType) conds.push(eq(seuAssessmentsTable.recordType, recordType));
+    }
+    if (year) conds.push(eq(seuAssessmentsTable.year, year));
+
+    const assessments = await db
+      .select({
+        id: seuAssessmentsTable.id,
+        unitId: seuAssessmentsTable.unitId,
+        unitName: unitsTable.name,
+        year: seuAssessmentsTable.year,
+        periodStart: seuAssessmentsTable.periodStart,
+        periodEnd: seuAssessmentsTable.periodEnd,
+        analysisLevel: seuAssessmentsTable.analysisLevel,
+        methodType: seuAssessmentsTable.methodType,
+        recordType: seuAssessmentsTable.recordType,
+        isOfficial: seuAssessmentsTable.isOfficial,
+        unitTotalTep: seuAssessmentsTable.unitTotalTep,
+        createdAt: seuAssessmentsTable.createdAt,
+        updatedAt: seuAssessmentsTable.updatedAt,
+      })
+      .from(seuAssessmentsTable)
+      .leftJoin(unitsTable, eq(seuAssessmentsTable.unitId, unitsTable.id))
+      .where(and(...conds))
+      .orderBy(desc(seuAssessmentsTable.createdAt));
+
+    const ids = assessments.map(a => a.id);
+    let itemCounts: Record<number, { total: number; seu: number }> = {};
+    if (ids.length > 0) {
+      const counts = await db
+        .select({
+          assessmentId: seuAssessmentItemsTable.assessmentId,
+          total: sql<number>`COUNT(*)`,
+          seu: sql<number>`SUM(CASE WHEN ${seuAssessmentItemsTable.userDecision} = 'accepted_as_seu' OR (${seuAssessmentItemsTable.userDecision} IS NULL AND ${seuAssessmentItemsTable.systemRecommendation} = 'seu_candidate') THEN 1 ELSE 0 END)`,
+        })
+        .from(seuAssessmentItemsTable)
+        .where(inArray(seuAssessmentItemsTable.assessmentId, ids))
+        .groupBy(seuAssessmentItemsTable.assessmentId);
+      itemCounts = Object.fromEntries(counts.map(c => [
+        c.assessmentId,
+        { total: Number(c.total) || 0, seu: Number(c.seu) || 0 },
+      ]));
+    }
+
+    res.json(assessments.map(a => ({
+      ...a,
+      itemCount: itemCounts[a.id]?.total ?? 0,
+      seuCount: itemCounts[a.id]?.seu ?? 0,
+    })));
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Sunucu hatası" });
+  }
+});
+
+// ── GET /seu/assessments/:id ─────────────────────────────
+router.get("/seu/assessments/:id", requireAuth, async (req, res) => {
+  try {
+    const { role, companyId: sessionCompanyId, unitId: sessionUnitId } = req.user!;
+    const id = parseInt(req.params.id as string);
+    const [assessment] = await db
+      .select()
+      .from(seuAssessmentsTable)
+      .where(and(eq(seuAssessmentsTable.id, id), eq(seuAssessmentsTable.companyId, sessionCompanyId)));
+    if (!assessment) { res.status(404).json({ error: "Bulunamadı" }); return; }
+    if (role === "user" && assessment.unitId !== sessionUnitId) {
+      res.status(403).json({ error: "Yetki yok" }); return;
+    }
+    const items = await db
+      .select()
+      .from(seuAssessmentItemsTable)
+      .where(eq(seuAssessmentItemsTable.assessmentId, id))
+      .orderBy(seuAssessmentItemsTable.consumptionSharePercent);
+    res.json({ ...assessment, items });
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Sunucu hatası" });
+  }
+});
+
+// ── POST /seu/assessments ────────────────────────────────
+router.post("/seu/assessments", requireAuth, async (req, res) => {
+  try {
+    const { role, companyId: sessionCompanyId, unitId: sessionUnitId, id: userId } = req.user!;
+    const {
+      unitId, year, periodStart = 1, periodEnd = 12,
+      analysisLevel = "energyUseGroup",
+      methodType = "consumption_share_opportunity_matrix",
+      recordType: requestedRecordType,
+      unitTotalTep = 0, energySourceId = null,
+      items = [],
+    } = req.body;
+
+    let resolvedUnitId: number | null = null;
+    let recordType = "unit_official";
+    let isOfficial = true;
+
+    if (role === "user") {
+      resolvedUnitId = sessionUnitId;
+      recordType = "unit_official";
+      isOfficial = true;
+    } else {
+      resolvedUnitId = unitId ? parseInt(unitId) : null;
+      recordType = requestedRecordType ?? "admin_review";
+      isOfficial = recordType === "unit_official";
+    }
+
+    if (!resolvedUnitId) { res.status(400).json({ error: "Birim seçilmedi" }); return; }
+
+    if (recordType === "unit_official") {
+      const [existing] = await db
+        .select({ id: seuAssessmentsTable.id })
+        .from(seuAssessmentsTable)
+        .where(and(
+          eq(seuAssessmentsTable.companyId, sessionCompanyId),
+          eq(seuAssessmentsTable.unitId, resolvedUnitId),
+          eq(seuAssessmentsTable.year, parseInt(year)),
+          eq(seuAssessmentsTable.analysisLevel, analysisLevel),
+          eq(seuAssessmentsTable.methodType, methodType),
+          eq(seuAssessmentsTable.recordType, "unit_official"),
+        ));
+      if (existing) {
+        if (role === "admin" || role === "superadmin") {
+          res.status(409).json({ error: "Bu birim için resmi kayıt zaten mevcut. Admin kayıtları ezemez." }); return;
+        }
+        await db.delete(seuAssessmentItemsTable).where(eq(seuAssessmentItemsTable.assessmentId, existing.id));
+        await db.delete(seuAssessmentsTable).where(eq(seuAssessmentsTable.id, existing.id));
+      }
+    }
+
+    const [assessment] = await db.insert(seuAssessmentsTable).values({
+      companyId: sessionCompanyId,
+      unitId: resolvedUnitId,
+      year: parseInt(year),
+      periodStart: parseInt(periodStart),
+      periodEnd: parseInt(periodEnd),
+      analysisLevel,
+      methodType,
+      recordType,
+      isOfficial,
+      unitTotalTep: parseFloat(unitTotalTep) || 0,
+      energySourceId: energySourceId ? parseInt(energySourceId) : null,
+      createdByUserId: userId,
+      updatedByUserId: userId,
+    }).returning();
+
+    if (items.length > 0) {
+      await db.insert(seuAssessmentItemsTable).values(
+        items.map((item: any) => ({
+          assessmentId: assessment.id,
+          energyUseGroupId: item.energyUseGroupId ?? null,
+          meterId: item.meterId ?? null,
+          unitId: item.unitId ?? null,
+          subUnitId: item.subUnitId ?? null,
+          energySourceId: item.energySourceId ?? null,
+          name: item.name ?? "Tanımlanmamış",
+          energyTep: parseFloat(item.energyTep) || 0,
+          consumptionSharePercent: parseFloat(item.consumptionSharePercent) || 0,
+          hasOpportunity: !!item.hasOpportunity,
+          priorityResult: item.priorityResult ?? null,
+          systemRecommendation: item.systemRecommendation ?? "not_seu",
+          userDecision: item.userDecision || null,
+          decisionReason: item.decisionReason || null,
+          responsible: item.responsible || null,
+          targetReductionPercent: item.targetReductionPercent ? parseFloat(item.targetReductionPercent) : null,
+          notes: item.notes || null,
+        }))
+      );
+    }
+
+    res.status(201).json({ id: assessment.id });
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Sunucu hatası" });
+  }
+});
+
+// ── PATCH /seu/assessments/:id/items/:itemId ─────────────
+router.patch("/seu/assessments/:id/items/:itemId", requireAuth, async (req, res) => {
+  try {
+    const { role, companyId: sessionCompanyId, unitId: sessionUnitId } = req.user!;
+    const assessmentId = parseInt(req.params.id as string);
+    const itemId = parseInt(req.params.itemId as string);
+
+    const [assessment] = await db
+      .select()
+      .from(seuAssessmentsTable)
+      .where(and(eq(seuAssessmentsTable.id, assessmentId), eq(seuAssessmentsTable.companyId, sessionCompanyId)));
+    if (!assessment) { res.status(404).json({ error: "Bulunamadı" }); return; }
+    if (role === "user" && assessment.unitId !== sessionUnitId) {
+      res.status(403).json({ error: "Yetki yok" }); return;
+    }
+
+    const { hasOpportunity, userDecision, decisionReason, responsible, targetReductionPercent, notes } = req.body;
+    const updates: Record<string, unknown> = { updatedAt: new Date() };
+    if (hasOpportunity !== undefined) updates.hasOpportunity = !!hasOpportunity;
+    if (userDecision !== undefined) updates.userDecision = userDecision || null;
+    if (decisionReason !== undefined) updates.decisionReason = decisionReason || null;
+    if (responsible !== undefined) updates.responsible = responsible || null;
+    if (targetReductionPercent !== undefined) updates.targetReductionPercent = targetReductionPercent ? parseFloat(targetReductionPercent) : null;
+    if (notes !== undefined) updates.notes = notes || null;
+
+    if (hasOpportunity !== undefined) {
+      const [existingItem] = await db
+        .select({ consumptionSharePercent: seuAssessmentItemsTable.consumptionSharePercent })
+        .from(seuAssessmentItemsTable)
+        .where(eq(seuAssessmentItemsTable.id, itemId));
+      if (existingItem) {
+        const share = existingItem.consumptionSharePercent;
+        const newHasOpp = !!hasOpportunity;
+        const priority = computePriority(share, newHasOpp);
+        updates.priorityResult = priority;
+        updates.systemRecommendation = computeRecommendation(priority);
+      }
+    }
+
+    const [updated] = await db
+      .update(seuAssessmentItemsTable)
+      .set(updates)
+      .where(and(eq(seuAssessmentItemsTable.id, itemId), eq(seuAssessmentItemsTable.assessmentId, assessmentId)))
+      .returning();
+    if (!updated) { res.status(404).json({ error: "Kalem bulunamadı" }); return; }
+    res.json(updated);
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Sunucu hatası" });
+  }
+});
+
+// ── DELETE /seu/assessments/:id ──────────────────────────
+router.delete("/seu/assessments/:id", requireAuth, async (req, res) => {
+  try {
+    const { role, companyId: sessionCompanyId, unitId: sessionUnitId } = req.user!;
+    const id = parseInt(req.params.id as string);
+    const [assessment] = await db
+      .select()
+      .from(seuAssessmentsTable)
+      .where(and(eq(seuAssessmentsTable.id, id), eq(seuAssessmentsTable.companyId, sessionCompanyId)));
+    if (!assessment) { res.status(404).send(); return; }
+    if (role === "user" && assessment.unitId !== sessionUnitId) {
+      res.status(403).json({ error: "Yetki yok" }); return;
+    }
+    if (role === "admin" && assessment.recordType === "unit_official") {
+      res.status(403).json({ error: "Admin resmi kayıtları silemez" }); return;
+    }
+    await db.delete(seuAssessmentsTable).where(eq(seuAssessmentsTable.id, id));
+    res.status(204).send();
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Sunucu hatası" });
+  }
+});
+
+export default router;

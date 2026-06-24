@@ -290,6 +290,58 @@ export const insertSeuSchema = createInsertSchema(seuTable).omit({ id: true, cre
 export type InsertSeu = z.infer<typeof insertSeuSchema>;
 export type SeuItem = typeof seuTable.$inferSelect;
 
+// ── SEU Assessments (ÖEK Değerlendirmeleri) ─────────────
+export const seuAssessmentsTable = pgTable("seu_assessments", {
+  id: serial("id").primaryKey(),
+  companyId: integer("company_id").references(() => companiesTable.id).notNull().default(1),
+  unitId: integer("unit_id").references(() => unitsTable.id, { onDelete: "cascade" }),
+  year: integer("year").notNull(),
+  periodStart: integer("period_start").notNull().default(1),
+  periodEnd: integer("period_end").notNull().default(12),
+  analysisLevel: text("analysis_level").notNull().default("energyUseGroup"),
+  methodType: text("method_type").notNull().default("consumption_share_opportunity_matrix"),
+  recordType: text("record_type").notNull().default("unit_official"),
+  isOfficial: boolean("is_official").notNull().default(true),
+  unitTotalTep: real("unit_total_tep").notNull().default(0),
+  energySourceId: integer("energy_source_id").references(() => energySourcesTable.id, { onDelete: "set null" }),
+  createdByUserId: integer("created_by_user_id").references(() => usersTable.id, { onDelete: "set null" }),
+  updatedByUserId: integer("updated_by_user_id").references(() => usersTable.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertSeuAssessmentSchema = createInsertSchema(seuAssessmentsTable).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertSeuAssessment = z.infer<typeof insertSeuAssessmentSchema>;
+export type SeuAssessment = typeof seuAssessmentsTable.$inferSelect;
+
+// ── SEU Assessment Items (ÖEK Kalem Sonuçları) ──────────
+export const seuAssessmentItemsTable = pgTable("seu_assessment_items", {
+  id: serial("id").primaryKey(),
+  assessmentId: integer("assessment_id").references(() => seuAssessmentsTable.id, { onDelete: "cascade" }).notNull(),
+  energyUseGroupId: integer("energy_use_group_id").references(() => energyUseGroupsTable.id, { onDelete: "set null" }),
+  meterId: integer("meter_id").references(() => metersTable.id, { onDelete: "set null" }),
+  unitId: integer("unit_id").references(() => unitsTable.id, { onDelete: "set null" }),
+  subUnitId: integer("sub_unit_id").references(() => subUnitsTable.id, { onDelete: "set null" }),
+  energySourceId: integer("energy_source_id").references(() => energySourcesTable.id, { onDelete: "set null" }),
+  name: text("name").notNull(),
+  energyTep: real("energy_tep").notNull().default(0),
+  consumptionSharePercent: real("consumption_share_percent").notNull().default(0),
+  hasOpportunity: boolean("has_opportunity").notNull().default(false),
+  priorityResult: integer("priority_result"),
+  systemRecommendation: text("system_recommendation").notNull().default("not_seu"),
+  userDecision: text("user_decision"),
+  decisionReason: text("decision_reason"),
+  responsible: text("responsible"),
+  targetReductionPercent: real("target_reduction_percent"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertSeuAssessmentItemSchema = createInsertSchema(seuAssessmentItemsTable).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertSeuAssessmentItem = z.infer<typeof insertSeuAssessmentItemSchema>;
+export type SeuAssessmentItem = typeof seuAssessmentItemsTable.$inferSelect;
+
 // ── Energy Targets (Enerji Hedefleri) ────────────────────
 export const energyTargetsTable = pgTable("energy_targets", {
   id: serial("id").primaryKey(),

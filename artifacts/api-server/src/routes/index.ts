@@ -21,6 +21,7 @@ import companiesRouter from "./companies";
 import energyUseGroupsRouter from "./energy-use-groups";
 import mgmRouter from "./mgm";
 import variablesRouter from "./variables";
+import seuAssessmentRouter from "./seu-assessment";
 
 const router: IRouter = Router();
 
@@ -46,5 +47,6 @@ router.use(targetsRouter);
 router.use(companiesRouter);
 router.use(mgmRouter);
 router.use(variablesRouter);
+router.use(seuAssessmentRouter);
 
 export default router;
