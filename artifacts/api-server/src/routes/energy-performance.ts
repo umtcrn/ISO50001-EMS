@@ -16,7 +16,7 @@ import {
   energyPerformanceResultsTable,
   usersTable,
 } from "@workspace/db";
-import { eq, and, inArray, desc, asc, ne } from "drizzle-orm";
+import { eq, and, inArray, desc, asc } from "drizzle-orm";
 import { requireAuth } from "../middlewares/auth.js";
 
 const router = Router();
@@ -1195,7 +1195,7 @@ router.get("/energy-performance/baselines", requireAuth, async (req, res) => {
 // Yeni EnRÇ kaydı oluştur
 router.post("/energy-performance/baselines", requireAuth, async (req, res) => {
   try {
-    const { role, companyId: sessionCompanyId, unitId: sessionUnitId, userId, name: userName } = req.user!;
+    const { role, companyId: sessionCompanyId, unitId: sessionUnitId, userId } = req.user!;
 
     const {
       seuItemId,

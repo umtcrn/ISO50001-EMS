@@ -40,7 +40,14 @@ async function apiFetch(url: string, token: string | null, options?: RequestInit
       ...(options?.headers ?? {}),
     },
   });
-  if (!res.ok) throw Object.assign(new Error("API hatası"), { status: res.status });
+  if (!res.ok) {
+    let serverMsg = "API hatası";
+    try {
+      const body = await res.json();
+      serverMsg = body?.error ?? body?.message ?? serverMsg;
+    } catch { /* body parse edilemedi */ }
+    throw Object.assign(new Error(serverMsg), { status: res.status });
+  }
   return res.json();
 }
 
