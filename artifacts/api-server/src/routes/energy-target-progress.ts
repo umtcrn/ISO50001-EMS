@@ -63,13 +63,22 @@ router.post("/energy-target-progress", requireAuth, async (req, res) => {
       res.status(403).json({ error: "Yetki yok" }); return;
     }
 
+    const parsedPeriodMonth =
+      periodMonth !== null && periodMonth !== undefined && periodMonth !== ""
+        ? parseInt(periodMonth)
+        : null;
+    const parsedActualSaving =
+      actualSavingValue !== null && actualSavingValue !== undefined && actualSavingValue !== ""
+        ? parseFloat(actualSavingValue)
+        : null;
+
     const [item] = await db.insert(energyTargetProgressTable).values({
       companyId: sessionCompanyId,
       targetId: parseInt(targetId),
       periodYear: parseInt(periodYear),
-      periodMonth: periodMonth !== undefined ? parseInt(periodMonth) : null,
+      periodMonth: parsedPeriodMonth,
       actualValue: parseFloat(actualValue),
-      actualSavingValue: actualSavingValue !== undefined ? parseFloat(actualSavingValue) : null,
+      actualSavingValue: parsedActualSaving,
       comment: comment || null,
       recordedBy: userName,
     }).returning();

@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, energyActionPlansTable, energyTargetsTable } from "@workspace/db";
+import { db, energyActionPlansTable, energyTargetsTable, vapProjectsTable } from "@workspace/db";
 import { eq, and, SQL } from "drizzle-orm";
 import { requireAuth } from "../middlewares/auth.js";
 
@@ -86,6 +86,10 @@ router.post("/energy-action-plans", requireAuth, async (req, res) => {
     }
 
     const progress = Math.min(100, Math.max(0, parseFloat(progressPercent ?? "0") || 0));
+    const toNum = (v: unknown) =>
+      v !== null && v !== undefined && v !== "" && !isNaN(parseFloat(String(v)))
+        ? parseFloat(String(v))
+        : null;
 
     const [item] = await db.insert(energyActionPlansTable).values({
       companyId: sessionCompanyId,
@@ -94,11 +98,11 @@ router.post("/energy-action-plans", requireAuth, async (req, res) => {
       description: description || null,
       responsibleName: responsibleName || null,
       priority: priority || "medium",
-      expectedSavingValue: expectedSavingValue !== undefined ? parseFloat(expectedSavingValue) : null,
+      expectedSavingValue: toNum(expectedSavingValue),
       expectedSavingUnit: expectedSavingUnit || null,
-      expectedCostSaving: expectedCostSaving !== undefined ? parseFloat(expectedCostSaving) : null,
-      investmentCost: investmentCost !== undefined ? parseFloat(investmentCost) : null,
-      paybackMonths: paybackMonths !== undefined ? parseFloat(paybackMonths) : null,
+      expectedCostSaving: toNum(expectedCostSaving),
+      investmentCost: toNum(investmentCost),
+      paybackMonths: toNum(paybackMonths),
       startDate: startDate || null,
       dueDate: dueDate || null,
       completionDate: completionDate || null,
@@ -108,6 +112,24 @@ router.post("/energy-action-plans", requireAuth, async (req, res) => {
       notes: notes || null,
       createdBy: userName,
     }).returning();
+
+    // isVap=true ise otomatik VAP projesi oluştur
+    if (Boolean(isVap)) {
+      await db.insert(vapProjectsTable).values({
+        companyId: sessionCompanyId,
+        actionPlanId: item.id,
+        projectTitle: title,
+        annualCostSaving: toNum(expectedCostSaving),
+        investmentCost: toNum(investmentCost),
+        paybackMonths: toNum(paybackMonths),
+        startDate: startDate || null,
+        endDate: dueDate || null,
+        status: "idea",
+        notes: notes || null,
+        createdBy: userName,
+      });
+    }
+
     res.status(201).json(item);
   } catch (err) {
     req.log.error(err);
@@ -139,25 +161,51 @@ router.put("/energy-action-plans/:id", requireAuth, async (req, res) => {
       progressPercent, status, isVap, notes,
     } = req.body;
 
+    const toNum = (v: unknown) =>
+      v !== null && v !== undefined && v !== "" && !isNaN(parseFloat(String(v)))
+        ? parseFloat(String(v))
+        : null;
+
     const updates: Record<string, unknown> = { updatedAt: new Date() };
     if (title !== undefined) updates.title = title;
     if (description !== undefined) updates.description = description || null;
     if (responsibleName !== undefined) updates.responsibleName = responsibleName || null;
     if (priority !== undefined) updates.priority = priority;
-    if (expectedSavingValue !== undefined) updates.expectedSavingValue = expectedSavingValue !== null ? parseFloat(expectedSavingValue) : null;
+    if (expectedSavingValue !== undefined) updates.expectedSavingValue = toNum(expectedSavingValue);
     if (expectedSavingUnit !== undefined) updates.expectedSavingUnit = expectedSavingUnit || null;
-    if (expectedCostSaving !== undefined) updates.expectedCostSaving = expectedCostSaving !== null ? parseFloat(expectedCostSaving) : null;
-    if (investmentCost !== undefined) updates.investmentCost = investmentCost !== null ? parseFloat(investmentCost) : null;
-    if (paybackMonths !== undefined) updates.paybackMonths = paybackMonths !== null ? parseFloat(paybackMonths) : null;
+    if (expectedCostSaving !== undefined) updates.expectedCostSaving = toNum(expectedCostSaving);
+    if (investmentCost !== undefined) updates.investmentCost = toNum(investmentCost);
+    if (paybackMonths !== undefined) updates.paybackMonths = toNum(paybackMonths);
     if (startDate !== undefined) updates.startDate = startDate || null;
     if (dueDate !== undefined) updates.dueDate = dueDate || null;
     if (completionDate !== undefined) updates.completionDate = completionDate || null;
-    if (progressPercent !== undefined) updates.progressPercent = Math.min(100, Math.max(0, parseFloat(progressPercent) || 0));
+    if (progressPercent !== undefined) updates.progressPercent = Math.min(100, Math.max(0, toNum(progressPercent) ?? 0));
     if (status !== undefined) updates.status = status;
     if (isVap !== undefined) updates.isVap = Boolean(isVap);
     if (notes !== undefined) updates.notes = notes || null;
 
     const [item] = await db.update(energyActionPlansTable).set(updates).where(eq(energyActionPlansTable.id, id)).returning();
+
+    // isVap true'ya çevrilirse ve VAP projesi yoksa oluştur
+    if (Boolean(isVap) && isVap !== undefined) {
+      const existing = await db.select({ id: vapProjectsTable.id })
+        .from(vapProjectsTable)
+        .where(eq(vapProjectsTable.actionPlanId, id));
+      if (existing.length === 0) {
+        const { name: userName } = req.user!;
+        await db.insert(vapProjectsTable).values({
+          companyId: sessionCompanyId,
+          actionPlanId: id,
+          projectTitle: item.title,
+          annualCostSaving: item.expectedCostSaving,
+          investmentCost: item.investmentCost,
+          paybackMonths: item.paybackMonths,
+          status: "idea",
+          createdBy: userName,
+        });
+      }
+    }
+
     res.json(item);
   } catch (err) {
     req.log.error(err);

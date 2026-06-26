@@ -294,20 +294,29 @@ export default function Targets() {
     const { targetId, title, priority, status, isVap, progressPercent } = actionForm;
     if (!targetId) { toast({ title: "Hedef seçiniz", variant: "destructive" }); return; }
     if (!title) { toast({ title: "Eylem adı zorunludur", variant: "destructive" }); return; }
-    const prog = parseFloat(progressPercent);
+    const prog = progressPercent === "" ? 0 : parseFloat(progressPercent);
     if (isNaN(prog) || prog < 0 || prog > 100) { toast({ title: "İlerleme 0-100 arası olmalı", variant: "destructive" }); return; }
 
+    const toNum = (v: string) => v !== "" && !isNaN(parseFloat(v)) ? parseFloat(v) : null;
+
     const payload = {
-      targetId, title, description: actionForm.description || null,
-      responsibleName: actionForm.responsibleName || null, priority,
-      expectedSavingValue: actionForm.expectedSavingValue || null,
+      targetId,
+      title,
+      description: actionForm.description || null,
+      responsibleName: actionForm.responsibleName || null,
+      priority,
+      expectedSavingValue: toNum(actionForm.expectedSavingValue),
       expectedSavingUnit: actionForm.expectedSavingUnit || null,
-      expectedCostSaving: actionForm.expectedCostSaving || null,
-      investmentCost: actionForm.investmentCost || null,
-      paybackMonths: actionForm.paybackMonths || null,
-      startDate: actionForm.startDate || null, dueDate: actionForm.dueDate || null,
+      expectedCostSaving: toNum(actionForm.expectedCostSaving),
+      investmentCost: toNum(actionForm.investmentCost),
+      paybackMonths: toNum(actionForm.paybackMonths),
+      startDate: actionForm.startDate || null,
+      dueDate: actionForm.dueDate || null,
       completionDate: actionForm.completionDate || null,
-      progressPercent: prog, status, isVap, notes: actionForm.notes || null,
+      progressPercent: prog,
+      status,
+      isVap,
+      notes: actionForm.notes || null,
     };
     try {
       if (editingActionId !== null) {
@@ -315,12 +324,12 @@ export default function Targets() {
         toast({ title: "Eylem planı güncellendi" });
       } else {
         await axios.post("/api/energy-action-plans", payload, { headers: authHeader() });
-        toast({ title: "Eylem planı eklendi" });
+        toast({ title: isVap ? "Eylem planı eklendi ve VAP projesine aktarıldı" : "Eylem planı eklendi" });
       }
       setActionOpen(false);
       await loadActions(selectedTargetId);
     } catch (e: any) {
-      toast({ title: e?.response?.data?.error ?? "İşlem başarısız", variant: "destructive" });
+      toast({ title: e?.response?.data?.error ?? e?.message ?? "İşlem başarısız", variant: "destructive" });
     }
   }
 
@@ -348,11 +357,16 @@ export default function Targets() {
     if (!targetId) { toast({ title: "Hedef seçiniz", variant: "destructive" }); return; }
     if (!periodYear) { toast({ title: "Yıl zorunludur", variant: "destructive" }); return; }
     if (actualValue === "") { toast({ title: "Gerçekleşen değer zorunludur", variant: "destructive" }); return; }
-    if (parseFloat(actualValue) < 0) { toast({ title: "Değer negatif olamaz", variant: "destructive" }); return; }
+    const val = parseFloat(actualValue);
+    if (isNaN(val) || val < 0) { toast({ title: "Geçerli bir değer giriniz", variant: "destructive" }); return; }
+    const savingVal = progressForm.actualSavingValue !== "" ? parseFloat(progressForm.actualSavingValue) : null;
     try {
       await axios.post("/api/energy-target-progress", {
-        targetId, periodYear, periodMonth: progressForm.periodMonth || null,
-        actualValue, actualSavingValue: progressForm.actualSavingValue || null,
+        targetId,
+        periodYear: parseInt(periodYear),
+        periodMonth: progressForm.periodMonth !== "" ? parseInt(progressForm.periodMonth) : null,
+        actualValue: val,
+        actualSavingValue: savingVal !== null && !isNaN(savingVal) ? savingVal : null,
         comment: progressForm.comment || null,
       }, { headers: authHeader() });
       toast({ title: "Gerçekleşme kaydedildi" });
@@ -360,7 +374,7 @@ export default function Targets() {
       await loadProgress(selectedProgressTargetId);
       queryClient.invalidateQueries({ queryKey: getListTargetsQueryKey(unitParam) });
     } catch (e: any) {
-      toast({ title: e?.response?.data?.error ?? "İşlem başarısız", variant: "destructive" });
+      toast({ title: e?.response?.data?.error ?? e?.message ?? "İşlem başarısız", variant: "destructive" });
     }
   }
 
