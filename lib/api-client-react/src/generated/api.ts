@@ -30,8 +30,13 @@ import type {
   ConsumptionRecord,
   ConsumptionUpdate,
   DashboardKpi,
+  EnergyActionPlan,
+  EnergyActionPlanInput,
+  EnergyActionPlanUpdate,
   EnergyTarget,
   EnergyTargetInput,
+  EnergyTargetProgressInput,
+  EnergyTargetProgressRecord,
   EnergyTargetUpdate,
   EnergyTargetWithProgress,
   GetDashboardKpiParams,
@@ -42,6 +47,8 @@ import type {
   GetSummaryParams,
   HealthStatus,
   ListConsumptionParams,
+  ListEnergyActionPlansParams,
+  ListEnergyTargetProgressParams,
   ListMetersParams,
   ListRisksParams,
   ListSeuParams,
@@ -74,6 +81,9 @@ import type {
   UnitInput,
   UnitUpdate,
   UpdateRiskNoteBody,
+  VapProject,
+  VapProjectInput,
+  VapProjectUpdate,
   WeatherFetchRequest,
   WeatherRecord
 } from './api.schemas';
@@ -2127,6 +2137,818 @@ export const useDeleteTarget = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getDeleteTargetMutationOptions(options));
+    }
+
+export const getListEnergyActionPlansUrl = (params?: ListEnergyActionPlansParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/energy-action-plans?${stringifiedParams}` : `/api/energy-action-plans`
+}
+
+/**
+ * @summary Eylem planlarını listele
+ */
+export const listEnergyActionPlans = async (params?: ListEnergyActionPlansParams, options?: RequestInit): Promise<EnergyActionPlan[]> => {
+
+  return customFetch<EnergyActionPlan[]>(getListEnergyActionPlansUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListEnergyActionPlansQueryKey = (params?: ListEnergyActionPlansParams,) => {
+    return [
+    `/api/energy-action-plans`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListEnergyActionPlansQueryOptions = <TData = Awaited<ReturnType<typeof listEnergyActionPlans>>, TError = ErrorType<unknown>>(params?: ListEnergyActionPlansParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listEnergyActionPlans>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListEnergyActionPlansQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listEnergyActionPlans>>> = ({ signal }) => listEnergyActionPlans(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listEnergyActionPlans>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListEnergyActionPlansQueryResult = NonNullable<Awaited<ReturnType<typeof listEnergyActionPlans>>>
+export type ListEnergyActionPlansQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Eylem planlarını listele
+ */
+
+export function useListEnergyActionPlans<TData = Awaited<ReturnType<typeof listEnergyActionPlans>>, TError = ErrorType<unknown>>(
+ params?: ListEnergyActionPlansParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listEnergyActionPlans>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListEnergyActionPlansQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getCreateEnergyActionPlanUrl = () => {
+
+
+
+
+  return `/api/energy-action-plans`
+}
+
+/**
+ * @summary Eylem planı ekle
+ */
+export const createEnergyActionPlan = async (energyActionPlanInput: EnergyActionPlanInput, options?: RequestInit): Promise<EnergyActionPlan> => {
+
+  return customFetch<EnergyActionPlan>(getCreateEnergyActionPlanUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      energyActionPlanInput,)
+  }
+);}
+
+
+
+
+export const getCreateEnergyActionPlanMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createEnergyActionPlan>>, TError,{data: BodyType<EnergyActionPlanInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createEnergyActionPlan>>, TError,{data: BodyType<EnergyActionPlanInput>}, TContext> => {
+
+const mutationKey = ['createEnergyActionPlan'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createEnergyActionPlan>>, {data: BodyType<EnergyActionPlanInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createEnergyActionPlan(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateEnergyActionPlanMutationResult = NonNullable<Awaited<ReturnType<typeof createEnergyActionPlan>>>
+    export type CreateEnergyActionPlanMutationBody = BodyType<EnergyActionPlanInput>
+    export type CreateEnergyActionPlanMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Eylem planı ekle
+ */
+export const useCreateEnergyActionPlan = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createEnergyActionPlan>>, TError,{data: BodyType<EnergyActionPlanInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createEnergyActionPlan>>,
+        TError,
+        {data: BodyType<EnergyActionPlanInput>},
+        TContext
+      > => {
+      return useMutation(getCreateEnergyActionPlanMutationOptions(options));
+    }
+
+export const getUpdateEnergyActionPlanUrl = (id: number,) => {
+
+
+
+
+  return `/api/energy-action-plans/${id}`
+}
+
+/**
+ * @summary Eylem planı güncelle
+ */
+export const updateEnergyActionPlan = async (id: number,
+    energyActionPlanUpdate: EnergyActionPlanUpdate, options?: RequestInit): Promise<EnergyActionPlan> => {
+
+  return customFetch<EnergyActionPlan>(getUpdateEnergyActionPlanUrl(id),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      energyActionPlanUpdate,)
+  }
+);}
+
+
+
+
+export const getUpdateEnergyActionPlanMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateEnergyActionPlan>>, TError,{id: number;data: BodyType<EnergyActionPlanUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateEnergyActionPlan>>, TError,{id: number;data: BodyType<EnergyActionPlanUpdate>}, TContext> => {
+
+const mutationKey = ['updateEnergyActionPlan'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateEnergyActionPlan>>, {id: number;data: BodyType<EnergyActionPlanUpdate>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateEnergyActionPlan(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateEnergyActionPlanMutationResult = NonNullable<Awaited<ReturnType<typeof updateEnergyActionPlan>>>
+    export type UpdateEnergyActionPlanMutationBody = BodyType<EnergyActionPlanUpdate>
+    export type UpdateEnergyActionPlanMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Eylem planı güncelle
+ */
+export const useUpdateEnergyActionPlan = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateEnergyActionPlan>>, TError,{id: number;data: BodyType<EnergyActionPlanUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateEnergyActionPlan>>,
+        TError,
+        {id: number;data: BodyType<EnergyActionPlanUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateEnergyActionPlanMutationOptions(options));
+    }
+
+export const getDeleteEnergyActionPlanUrl = (id: number,) => {
+
+
+
+
+  return `/api/energy-action-plans/${id}`
+}
+
+/**
+ * @summary Eylem planı sil
+ */
+export const deleteEnergyActionPlan = async (id: number, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDeleteEnergyActionPlanUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteEnergyActionPlanMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteEnergyActionPlan>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteEnergyActionPlan>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['deleteEnergyActionPlan'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteEnergyActionPlan>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteEnergyActionPlan(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteEnergyActionPlanMutationResult = NonNullable<Awaited<ReturnType<typeof deleteEnergyActionPlan>>>
+
+    export type DeleteEnergyActionPlanMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Eylem planı sil
+ */
+export const useDeleteEnergyActionPlan = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteEnergyActionPlan>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteEnergyActionPlan>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getDeleteEnergyActionPlanMutationOptions(options));
+    }
+
+export const getListEnergyTargetProgressUrl = (params?: ListEnergyTargetProgressParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/energy-target-progress?${stringifiedParams}` : `/api/energy-target-progress`
+}
+
+/**
+ * @summary Hedef gerçekleşme kayıtlarını listele
+ */
+export const listEnergyTargetProgress = async (params?: ListEnergyTargetProgressParams, options?: RequestInit): Promise<EnergyTargetProgressRecord[]> => {
+
+  return customFetch<EnergyTargetProgressRecord[]>(getListEnergyTargetProgressUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListEnergyTargetProgressQueryKey = (params?: ListEnergyTargetProgressParams,) => {
+    return [
+    `/api/energy-target-progress`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListEnergyTargetProgressQueryOptions = <TData = Awaited<ReturnType<typeof listEnergyTargetProgress>>, TError = ErrorType<unknown>>(params?: ListEnergyTargetProgressParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listEnergyTargetProgress>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListEnergyTargetProgressQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listEnergyTargetProgress>>> = ({ signal }) => listEnergyTargetProgress(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listEnergyTargetProgress>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListEnergyTargetProgressQueryResult = NonNullable<Awaited<ReturnType<typeof listEnergyTargetProgress>>>
+export type ListEnergyTargetProgressQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Hedef gerçekleşme kayıtlarını listele
+ */
+
+export function useListEnergyTargetProgress<TData = Awaited<ReturnType<typeof listEnergyTargetProgress>>, TError = ErrorType<unknown>>(
+ params?: ListEnergyTargetProgressParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listEnergyTargetProgress>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListEnergyTargetProgressQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getCreateEnergyTargetProgressUrl = () => {
+
+
+
+
+  return `/api/energy-target-progress`
+}
+
+/**
+ * @summary Gerçekleşme kaydı ekle
+ */
+export const createEnergyTargetProgress = async (energyTargetProgressInput: EnergyTargetProgressInput, options?: RequestInit): Promise<EnergyTargetProgressRecord> => {
+
+  return customFetch<EnergyTargetProgressRecord>(getCreateEnergyTargetProgressUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      energyTargetProgressInput,)
+  }
+);}
+
+
+
+
+export const getCreateEnergyTargetProgressMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createEnergyTargetProgress>>, TError,{data: BodyType<EnergyTargetProgressInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createEnergyTargetProgress>>, TError,{data: BodyType<EnergyTargetProgressInput>}, TContext> => {
+
+const mutationKey = ['createEnergyTargetProgress'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createEnergyTargetProgress>>, {data: BodyType<EnergyTargetProgressInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createEnergyTargetProgress(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateEnergyTargetProgressMutationResult = NonNullable<Awaited<ReturnType<typeof createEnergyTargetProgress>>>
+    export type CreateEnergyTargetProgressMutationBody = BodyType<EnergyTargetProgressInput>
+    export type CreateEnergyTargetProgressMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Gerçekleşme kaydı ekle
+ */
+export const useCreateEnergyTargetProgress = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createEnergyTargetProgress>>, TError,{data: BodyType<EnergyTargetProgressInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createEnergyTargetProgress>>,
+        TError,
+        {data: BodyType<EnergyTargetProgressInput>},
+        TContext
+      > => {
+      return useMutation(getCreateEnergyTargetProgressMutationOptions(options));
+    }
+
+export const getDeleteEnergyTargetProgressUrl = (id: number,) => {
+
+
+
+
+  return `/api/energy-target-progress/${id}`
+}
+
+/**
+ * @summary Gerçekleşme kaydını sil
+ */
+export const deleteEnergyTargetProgress = async (id: number, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDeleteEnergyTargetProgressUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteEnergyTargetProgressMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteEnergyTargetProgress>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteEnergyTargetProgress>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['deleteEnergyTargetProgress'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteEnergyTargetProgress>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteEnergyTargetProgress(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteEnergyTargetProgressMutationResult = NonNullable<Awaited<ReturnType<typeof deleteEnergyTargetProgress>>>
+
+    export type DeleteEnergyTargetProgressMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Gerçekleşme kaydını sil
+ */
+export const useDeleteEnergyTargetProgress = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteEnergyTargetProgress>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteEnergyTargetProgress>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getDeleteEnergyTargetProgressMutationOptions(options));
+    }
+
+export const getListVapProjectsUrl = () => {
+
+
+
+
+  return `/api/vap-projects`
+}
+
+/**
+ * @summary VAP projelerini listele
+ */
+export const listVapProjects = async ( options?: RequestInit): Promise<VapProject[]> => {
+
+  return customFetch<VapProject[]>(getListVapProjectsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListVapProjectsQueryKey = () => {
+    return [
+    `/api/vap-projects`
+    ] as const;
+    }
+
+
+export const getListVapProjectsQueryOptions = <TData = Awaited<ReturnType<typeof listVapProjects>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listVapProjects>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListVapProjectsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listVapProjects>>> = ({ signal }) => listVapProjects({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listVapProjects>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListVapProjectsQueryResult = NonNullable<Awaited<ReturnType<typeof listVapProjects>>>
+export type ListVapProjectsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary VAP projelerini listele
+ */
+
+export function useListVapProjects<TData = Awaited<ReturnType<typeof listVapProjects>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listVapProjects>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListVapProjectsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getCreateVapProjectUrl = () => {
+
+
+
+
+  return `/api/vap-projects`
+}
+
+/**
+ * @summary VAP projesi oluştur
+ */
+export const createVapProject = async (vapProjectInput: VapProjectInput, options?: RequestInit): Promise<VapProject> => {
+
+  return customFetch<VapProject>(getCreateVapProjectUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      vapProjectInput,)
+  }
+);}
+
+
+
+
+export const getCreateVapProjectMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createVapProject>>, TError,{data: BodyType<VapProjectInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createVapProject>>, TError,{data: BodyType<VapProjectInput>}, TContext> => {
+
+const mutationKey = ['createVapProject'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createVapProject>>, {data: BodyType<VapProjectInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createVapProject(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateVapProjectMutationResult = NonNullable<Awaited<ReturnType<typeof createVapProject>>>
+    export type CreateVapProjectMutationBody = BodyType<VapProjectInput>
+    export type CreateVapProjectMutationError = ErrorType<unknown>
+
+    /**
+ * @summary VAP projesi oluştur
+ */
+export const useCreateVapProject = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createVapProject>>, TError,{data: BodyType<VapProjectInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createVapProject>>,
+        TError,
+        {data: BodyType<VapProjectInput>},
+        TContext
+      > => {
+      return useMutation(getCreateVapProjectMutationOptions(options));
+    }
+
+export const getUpdateVapProjectUrl = (id: number,) => {
+
+
+
+
+  return `/api/vap-projects/${id}`
+}
+
+/**
+ * @summary VAP projesi güncelle
+ */
+export const updateVapProject = async (id: number,
+    vapProjectUpdate: VapProjectUpdate, options?: RequestInit): Promise<VapProject> => {
+
+  return customFetch<VapProject>(getUpdateVapProjectUrl(id),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      vapProjectUpdate,)
+  }
+);}
+
+
+
+
+export const getUpdateVapProjectMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateVapProject>>, TError,{id: number;data: BodyType<VapProjectUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateVapProject>>, TError,{id: number;data: BodyType<VapProjectUpdate>}, TContext> => {
+
+const mutationKey = ['updateVapProject'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateVapProject>>, {id: number;data: BodyType<VapProjectUpdate>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateVapProject(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateVapProjectMutationResult = NonNullable<Awaited<ReturnType<typeof updateVapProject>>>
+    export type UpdateVapProjectMutationBody = BodyType<VapProjectUpdate>
+    export type UpdateVapProjectMutationError = ErrorType<unknown>
+
+    /**
+ * @summary VAP projesi güncelle
+ */
+export const useUpdateVapProject = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateVapProject>>, TError,{id: number;data: BodyType<VapProjectUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateVapProject>>,
+        TError,
+        {id: number;data: BodyType<VapProjectUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateVapProjectMutationOptions(options));
+    }
+
+export const getDeleteVapProjectUrl = (id: number,) => {
+
+
+
+
+  return `/api/vap-projects/${id}`
+}
+
+/**
+ * @summary VAP projesi sil
+ */
+export const deleteVapProject = async (id: number, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDeleteVapProjectUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteVapProjectMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteVapProject>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteVapProject>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['deleteVapProject'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteVapProject>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteVapProject(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteVapProjectMutationResult = NonNullable<Awaited<ReturnType<typeof deleteVapProject>>>
+
+    export type DeleteVapProjectMutationError = ErrorType<unknown>
+
+    /**
+ * @summary VAP projesi sil
+ */
+export const useDeleteVapProject = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteVapProject>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteVapProject>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getDeleteVapProjectMutationOptions(options));
     }
 
 export const getListRisksUrl = (params?: ListRisksParams,) => {

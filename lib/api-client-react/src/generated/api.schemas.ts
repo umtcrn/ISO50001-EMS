@@ -594,6 +594,224 @@ export interface CompanyUpdate {
   isActive?: boolean;
 }
 
+export interface EnergyActionPlan {
+  id: number;
+  companyId: number;
+  targetId: number;
+  title: string;
+  /** @nullable */
+  description?: string | null;
+  /** @nullable */
+  responsibleUserId?: number | null;
+  /** @nullable */
+  responsibleName?: string | null;
+  /** low | medium | high */
+  priority: string;
+  /** @nullable */
+  expectedSavingValue?: number | null;
+  /** @nullable */
+  expectedSavingUnit?: string | null;
+  /** @nullable */
+  expectedCostSaving?: number | null;
+  /** @nullable */
+  investmentCost?: number | null;
+  /** @nullable */
+  paybackMonths?: number | null;
+  /** @nullable */
+  startDate?: string | null;
+  /** @nullable */
+  dueDate?: string | null;
+  /** @nullable */
+  completionDate?: string | null;
+  progressPercent: number;
+  /** planned | in_progress | completed | delayed | cancelled */
+  status: string;
+  isVap: boolean;
+  /** @nullable */
+  notes?: string | null;
+  /** @nullable */
+  createdBy?: string | null;
+  createdAt: string;
+  /** @nullable */
+  updatedAt?: string | null;
+  /** @nullable */
+  targetName?: string | null;
+  /** @nullable */
+  targetUnitId?: number | null;
+}
+
+export interface EnergyActionPlanInput {
+  targetId: number;
+  title: string;
+  description?: string;
+  responsibleName?: string;
+  priority?: string;
+  expectedSavingValue?: number;
+  expectedSavingUnit?: string;
+  expectedCostSaving?: number;
+  investmentCost?: number;
+  paybackMonths?: number;
+  startDate?: string;
+  dueDate?: string;
+  completionDate?: string;
+  progressPercent?: number;
+  status?: string;
+  isVap?: boolean;
+  notes?: string;
+}
+
+export interface EnergyActionPlanUpdate {
+  title?: string;
+  description?: string;
+  responsibleName?: string;
+  priority?: string;
+  expectedSavingValue?: number;
+  expectedSavingUnit?: string;
+  expectedCostSaving?: number;
+  investmentCost?: number;
+  paybackMonths?: number;
+  startDate?: string;
+  dueDate?: string;
+  completionDate?: string;
+  progressPercent?: number;
+  status?: string;
+  isVap?: boolean;
+  notes?: string;
+}
+
+export interface EnergyTargetProgressRecord {
+  id: number;
+  companyId: number;
+  targetId: number;
+  periodYear: number;
+  /** @nullable */
+  periodMonth?: number | null;
+  actualValue: number;
+  /** @nullable */
+  actualSavingValue?: number | null;
+  /** @nullable */
+  comment?: string | null;
+  /** @nullable */
+  recordedBy?: string | null;
+  recordedAt: string;
+  /** @nullable */
+  targetUnitId?: number | null;
+}
+
+export interface EnergyTargetProgressInput {
+  targetId: number;
+  periodYear: number;
+  periodMonth?: number;
+  actualValue: number;
+  actualSavingValue?: number;
+  comment?: string;
+}
+
+export interface VapProject {
+  id: number;
+  companyId: number;
+  actionPlanId: number;
+  /** @nullable */
+  projectCode?: string | null;
+  projectTitle: string;
+  /** @nullable */
+  projectType?: string | null;
+  /** @nullable */
+  currentSituation?: string | null;
+  /** @nullable */
+  proposedSolution?: string | null;
+  /** @nullable */
+  technicalDescription?: string | null;
+  /** @nullable */
+  annualEnergySavingValue?: number | null;
+  /** @nullable */
+  annualEnergySavingUnit?: string | null;
+  /** @nullable */
+  annualCostSaving?: number | null;
+  /** @nullable */
+  investmentCost?: number | null;
+  /** @nullable */
+  paybackMonths?: number | null;
+  /** @nullable */
+  co2ReductionTon?: number | null;
+  /** @nullable */
+  measurementVerificationMethod?: string | null;
+  /** @nullable */
+  incentiveStatus?: string | null;
+  /** @nullable */
+  feasibilityStatus?: string | null;
+  /** @nullable */
+  startDate?: string | null;
+  /** @nullable */
+  endDate?: string | null;
+  /** idea | feasibility | planned | in_progress | completed | cancelled */
+  status: string;
+  /** @nullable */
+  notes?: string | null;
+  /** @nullable */
+  createdBy?: string | null;
+  createdAt: string;
+  /** @nullable */
+  updatedAt?: string | null;
+  /** @nullable */
+  actionPlanTitle?: string | null;
+  /** @nullable */
+  actionPlanStatus?: string | null;
+  /** @nullable */
+  targetId?: number | null;
+  /** @nullable */
+  targetName?: string | null;
+  /** @nullable */
+  targetUnitId?: number | null;
+  /** @nullable */
+  targetEnergySourceId?: number | null;
+}
+
+export interface VapProjectInput {
+  actionPlanId: number;
+  projectCode?: string;
+  projectTitle: string;
+  projectType?: string;
+  currentSituation?: string;
+  proposedSolution?: string;
+  technicalDescription?: string;
+  annualEnergySavingValue?: number;
+  annualEnergySavingUnit?: string;
+  annualCostSaving?: number;
+  investmentCost?: number;
+  paybackMonths?: number;
+  co2ReductionTon?: number;
+  measurementVerificationMethod?: string;
+  incentiveStatus?: string;
+  feasibilityStatus?: string;
+  startDate?: string;
+  endDate?: string;
+  status?: string;
+  notes?: string;
+}
+
+export interface VapProjectUpdate {
+  projectCode?: string;
+  projectTitle?: string;
+  projectType?: string;
+  currentSituation?: string;
+  proposedSolution?: string;
+  technicalDescription?: string;
+  annualEnergySavingValue?: number;
+  annualEnergySavingUnit?: string;
+  annualCostSaving?: number;
+  investmentCost?: number;
+  paybackMonths?: number;
+  co2ReductionTon?: number;
+  measurementVerificationMethod?: string;
+  incentiveStatus?: string;
+  feasibilityStatus?: string;
+  startDate?: string;
+  endDate?: string;
+  status?: string;
+  notes?: string;
+}
+
 export type ListUnitsParams = {
 companyId?: number;
 };
@@ -634,6 +852,14 @@ companyId?: number;
 export type ListTargetsParams = {
 unitId?: number;
 companyId?: number;
+};
+
+export type ListEnergyActionPlansParams = {
+targetId?: number;
+};
+
+export type ListEnergyTargetProgressParams = {
+targetId?: number;
 };
 
 export type ListRisksParams = {

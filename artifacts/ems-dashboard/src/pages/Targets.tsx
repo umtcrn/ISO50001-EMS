@@ -6,6 +6,10 @@ import { useAuth } from "@/context/AuthContext";
 import {
   useListTargets, useCreateTarget, useUpdateTarget, useDeleteTarget,
   getListTargetsQueryKey, useListUnits, getListUnitsQueryKey,
+  useListEnergyActionPlans, getListEnergyActionPlansQueryKey,
+  useCreateEnergyActionPlan, useUpdateEnergyActionPlan, useDeleteEnergyActionPlan,
+  useListEnergyTargetProgress, getListEnergyTargetProgressQueryKey,
+  useCreateEnergyTargetProgress, useDeleteEnergyTargetProgress,
 } from "@workspace/api-client-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -27,8 +31,6 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   ReferenceLine, ResponsiveContainer, Legend,
 } from "recharts";
-import axios from "axios";
-
 const CURRENT_YEAR = new Date().getFullYear();
 const YEARS = Array.from({ length: 20 }, (_, i) => CURRENT_YEAR - 10 + i);
 
@@ -182,16 +184,12 @@ export default function Targets() {
   const [actionForm, setActionForm] = useState<ActionPlanForm>(EMPTY_ACTION);
   const [deleteActionId, setDeleteActionId] = useState<number | null>(null);
   const [selectedTargetId, setSelectedTargetId] = useState<string>("");
-  const [actions, setActions] = useState<any[]>([]);
-  const [actionsLoading, setActionsLoading] = useState(false);
 
   // ── Progress ────────────────────────────────────────────
   const [progressOpen, setProgressOpen] = useState(false);
   const [deleteProgressId, setDeleteProgressId] = useState<number | null>(null);
   const [progressForm, setProgressForm] = useState<ProgressForm>(EMPTY_PROGRESS);
   const [selectedProgressTargetId, setSelectedProgressTargetId] = useState<string>("");
-  const [progressList, setProgressList] = useState<any[]>([]);
-  const [progressLoading, setProgressLoading] = useState(false);
 
   const { data: targets, isLoading } = useListTargets(unitParam, { query: { queryKey: getListTargetsQueryKey(unitParam) } });
   const { data: allUnits } = useListUnits({}, { query: { queryKey: getListUnitsQueryKey({}), enabled: isAdmin && unitId === null } });
@@ -201,10 +199,26 @@ export default function Targets() {
   const updateTarget = useUpdateTarget();
   const deleteTarget = useDeleteTarget();
 
-  const authHeader = () => {
-    const token = localStorage.getItem("eys_token");
-    return token ? { Authorization: `Bearer ${token}` } : {};
-  };
+  // ── Action Plan hooks ─────────────────────────────────────
+  const actionParams = selectedTargetId ? { targetId: parseInt(selectedTargetId) } : undefined;
+  const { data: actionsData, isLoading: actionsLoading } = useListEnergyActionPlans(
+    actionParams,
+    { query: { queryKey: getListEnergyActionPlansQueryKey(actionParams), enabled: !!selectedTargetId } },
+  );
+  const actions = actionsData ?? [];
+  const createAction = useCreateEnergyActionPlan();
+  const updateAction = useUpdateEnergyActionPlan();
+  const deleteAction = useDeleteEnergyActionPlan();
+
+  // ── Progress hooks ────────────────────────────────────────
+  const progressParams = selectedProgressTargetId ? { targetId: parseInt(selectedProgressTargetId) } : undefined;
+  const { data: progressData, isLoading: progressLoading } = useListEnergyTargetProgress(
+    progressParams,
+    { query: { queryKey: getListEnergyTargetProgressQueryKey(progressParams), enabled: !!selectedProgressTargetId } },
+  );
+  const progressList = progressData ?? [];
+  const createProgress = useCreateEnergyTargetProgress();
+  const deleteProgress = useDeleteEnergyTargetProgress();
 
   // ─── Target handlers ─────────────────────────────────────
   function openCreateTarget() {
@@ -281,110 +295,103 @@ export default function Targets() {
   }
 
   // ─── Action Plan handlers ─────────────────────────────────
-  async function loadActions(targetId: string) {
-    if (!targetId) { setActions([]); return; }
-    setActionsLoading(true);
-    try {
-      const r = await axios.get(`/api/energy-action-plans?targetId=${targetId}`, { headers: authHeader() });
-      setActions(r.data);
-    } catch { setActions([]); } finally { setActionsLoading(false); }
-  }
-
-  async function handleSaveAction() {
+  function handleSaveAction() {
     const { targetId, title, priority, status, isVap, progressPercent } = actionForm;
     if (!targetId) { toast({ title: "Hedef seçiniz", variant: "destructive" }); return; }
     if (!title) { toast({ title: "Eylem adı zorunludur", variant: "destructive" }); return; }
     const prog = progressPercent === "" ? 0 : parseFloat(progressPercent);
     if (isNaN(prog) || prog < 0 || prog > 100) { toast({ title: "İlerleme 0-100 arası olmalı", variant: "destructive" }); return; }
 
-    const toNum = (v: string) => v !== "" && !isNaN(parseFloat(v)) ? parseFloat(v) : null;
+    const toNum = (v: string) => v !== "" && !isNaN(parseFloat(v)) ? parseFloat(v) : undefined;
 
     const payload = {
-      targetId,
+      targetId: parseInt(targetId),
       title,
-      description: actionForm.description || null,
-      responsibleName: actionForm.responsibleName || null,
+      description: actionForm.description || undefined,
+      responsibleName: actionForm.responsibleName || undefined,
       priority,
       expectedSavingValue: toNum(actionForm.expectedSavingValue),
-      expectedSavingUnit: actionForm.expectedSavingUnit || null,
+      expectedSavingUnit: actionForm.expectedSavingUnit || undefined,
       expectedCostSaving: toNum(actionForm.expectedCostSaving),
       investmentCost: toNum(actionForm.investmentCost),
       paybackMonths: toNum(actionForm.paybackMonths),
-      startDate: actionForm.startDate || null,
-      dueDate: actionForm.dueDate || null,
-      completionDate: actionForm.completionDate || null,
+      startDate: actionForm.startDate || undefined,
+      dueDate: actionForm.dueDate || undefined,
+      completionDate: actionForm.completionDate || undefined,
       progressPercent: prog,
       status,
       isVap,
-      notes: actionForm.notes || null,
+      notes: actionForm.notes || undefined,
     };
-    try {
-      if (editingActionId !== null) {
-        await axios.put(`/api/energy-action-plans/${editingActionId}`, payload, { headers: authHeader() });
-        toast({ title: "Eylem planı güncellendi" });
-      } else {
-        await axios.post("/api/energy-action-plans", payload, { headers: authHeader() });
-        toast({ title: isVap ? "Eylem planı eklendi ve VAP projesine aktarıldı" : "Eylem planı eklendi" });
-      }
+
+    const invalidateActions = () => {
+      queryClient.invalidateQueries({ queryKey: getListEnergyActionPlansQueryKey(actionParams) });
       setActionOpen(false);
-      await loadActions(selectedTargetId);
-    } catch (e: any) {
-      toast({ title: e?.response?.data?.error ?? e?.message ?? "İşlem başarısız", variant: "destructive" });
+    };
+
+    if (editingActionId !== null) {
+      updateAction.mutate({ id: editingActionId, data: payload }, {
+        onSuccess: () => { invalidateActions(); toast({ title: "Eylem planı güncellendi" }); },
+        onError: (e: any) => toast({ title: e?.response?.data?.error ?? e?.message ?? "Güncelleme başarısız", variant: "destructive" }),
+      });
+    } else {
+      createAction.mutate({ data: payload }, {
+        onSuccess: () => { invalidateActions(); toast({ title: isVap ? "Eylem planı eklendi ve VAP projesine aktarıldı" : "Eylem planı eklendi" }); },
+        onError: (e: any) => toast({ title: e?.response?.data?.error ?? e?.message ?? "Ekleme başarısız", variant: "destructive" }),
+      });
     }
   }
 
-  async function handleDeleteAction(id: number) {
-    try {
-      await axios.delete(`/api/energy-action-plans/${id}`, { headers: authHeader() });
-      toast({ title: "Eylem planı silindi" });
-      setDeleteActionId(null);
-      await loadActions(selectedTargetId);
-    } catch { toast({ title: "Silme başarısız", variant: "destructive" }); }
+  function handleDeleteAction(id: number) {
+    deleteAction.mutate({ id }, {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getListEnergyActionPlansQueryKey(actionParams) });
+        setDeleteActionId(null);
+        toast({ title: "Eylem planı silindi" });
+      },
+      onError: () => toast({ title: "Silme başarısız", variant: "destructive" }),
+    });
   }
 
   // ─── Progress handlers ────────────────────────────────────
-  async function loadProgress(targetId: string) {
-    if (!targetId) { setProgressList([]); return; }
-    setProgressLoading(true);
-    try {
-      const r = await axios.get(`/api/energy-target-progress?targetId=${targetId}`, { headers: authHeader() });
-      setProgressList(r.data);
-    } catch { setProgressList([]); } finally { setProgressLoading(false); }
-  }
-
-  async function handleSaveProgress() {
+  function handleSaveProgress() {
     const { targetId, periodYear, actualValue } = progressForm;
     if (!targetId) { toast({ title: "Hedef seçiniz", variant: "destructive" }); return; }
     if (!periodYear) { toast({ title: "Yıl zorunludur", variant: "destructive" }); return; }
     if (actualValue === "") { toast({ title: "Gerçekleşen değer zorunludur", variant: "destructive" }); return; }
     const val = parseFloat(actualValue);
     if (isNaN(val) || val < 0) { toast({ title: "Geçerli bir değer giriniz", variant: "destructive" }); return; }
-    const savingVal = progressForm.actualSavingValue !== "" ? parseFloat(progressForm.actualSavingValue) : null;
-    try {
-      await axios.post("/api/energy-target-progress", {
-        targetId,
+    const savingVal = progressForm.actualSavingValue !== "" ? parseFloat(progressForm.actualSavingValue) : undefined;
+
+    createProgress.mutate({
+      data: {
+        targetId: parseInt(targetId),
         periodYear: parseInt(periodYear),
-        periodMonth: progressForm.periodMonth !== "" ? parseInt(progressForm.periodMonth) : null,
+        periodMonth: progressForm.periodMonth !== "" ? parseInt(progressForm.periodMonth) : undefined,
         actualValue: val,
-        actualSavingValue: savingVal !== null && !isNaN(savingVal) ? savingVal : null,
-        comment: progressForm.comment || null,
-      }, { headers: authHeader() });
-      toast({ title: "Gerçekleşme kaydedildi" });
-      setProgressOpen(false);
-      await loadProgress(selectedProgressTargetId);
-      queryClient.invalidateQueries({ queryKey: getListTargetsQueryKey(unitParam) });
-    } catch (e: any) {
-      toast({ title: e?.response?.data?.error ?? e?.message ?? "İşlem başarısız", variant: "destructive" });
-    }
+        actualSavingValue: savingVal !== undefined && !isNaN(savingVal) ? savingVal : undefined,
+        comment: progressForm.comment || undefined,
+      },
+    }, {
+      onSuccess: () => {
+        toast({ title: "Gerçekleşme kaydedildi" });
+        setProgressOpen(false);
+        queryClient.invalidateQueries({ queryKey: getListEnergyTargetProgressQueryKey(progressParams) });
+        queryClient.invalidateQueries({ queryKey: getListTargetsQueryKey(unitParam) });
+      },
+      onError: (e: any) => toast({ title: e?.response?.data?.error ?? e?.message ?? "İşlem başarısız", variant: "destructive" }),
+    });
   }
 
-  async function handleDeleteProgress(id: number) {
-    try {
-      await axios.delete(`/api/energy-target-progress/${id}`, { headers: authHeader() });
-      toast({ title: "Kayıt silindi" });
-      setDeleteProgressId(null);
-      await loadProgress(selectedProgressTargetId);
-    } catch { toast({ title: "Silme başarısız", variant: "destructive" }); }
+  function handleDeleteProgress(id: number) {
+    deleteProgress.mutate({ id }, {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getListEnergyTargetProgressQueryKey(progressParams) });
+        setDeleteProgressId(null);
+        toast({ title: "Kayıt silindi" });
+      },
+      onError: () => toast({ title: "Silme başarısız", variant: "destructive" }),
+    });
   }
 
   // ─── Summary stats ────────────────────────────────────────
@@ -542,7 +549,7 @@ export default function Targets() {
         <TabsContent value="actions" className="mt-4 space-y-4">
           <div className="flex items-center gap-3">
             <div className="flex-1 max-w-xs">
-              <Select value={selectedTargetId} onValueChange={(v) => { setSelectedTargetId(v); loadActions(v); }}>
+              <Select value={selectedTargetId} onValueChange={setSelectedTargetId}>
                 <SelectTrigger><SelectValue placeholder="Hedef seçin..." /></SelectTrigger>
                 <SelectContent>
                   {targetList.map((t: any) => <SelectItem key={t.id} value={t.id.toString()}>{t.name}</SelectItem>)}
@@ -632,7 +639,7 @@ export default function Targets() {
         <TabsContent value="progress" className="mt-4 space-y-4">
           <div className="flex items-center gap-3">
             <div className="flex-1 max-w-xs">
-              <Select value={selectedProgressTargetId} onValueChange={(v) => { setSelectedProgressTargetId(v); loadProgress(v); }}>
+              <Select value={selectedProgressTargetId} onValueChange={setSelectedProgressTargetId}>
                 <SelectTrigger><SelectValue placeholder="Hedef seçin..." /></SelectTrigger>
                 <SelectContent>
                   {targetList.map((t: any) => <SelectItem key={t.id} value={t.id.toString()}>{t.name}</SelectItem>)}

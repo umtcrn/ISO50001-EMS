@@ -564,6 +564,312 @@ export const DeleteTargetParams = zod.object({
 
 
 /**
+ * @summary Eylem planlarını listele
+ */
+export const ListEnergyActionPlansQueryParams = zod.object({
+  "targetId": zod.coerce.number().optional()
+})
+
+export const ListEnergyActionPlansResponseItem = zod.object({
+  "id": zod.number(),
+  "companyId": zod.number(),
+  "targetId": zod.number(),
+  "title": zod.string(),
+  "description": zod.string().nullish(),
+  "responsibleUserId": zod.number().nullish(),
+  "responsibleName": zod.string().nullish(),
+  "priority": zod.string().describe('low | medium | high'),
+  "expectedSavingValue": zod.number().nullish(),
+  "expectedSavingUnit": zod.string().nullish(),
+  "expectedCostSaving": zod.number().nullish(),
+  "investmentCost": zod.number().nullish(),
+  "paybackMonths": zod.number().nullish(),
+  "startDate": zod.string().nullish(),
+  "dueDate": zod.string().nullish(),
+  "completionDate": zod.string().nullish(),
+  "progressPercent": zod.number(),
+  "status": zod.string().describe('planned | in_progress | completed | delayed | cancelled'),
+  "isVap": zod.boolean(),
+  "notes": zod.string().nullish(),
+  "createdBy": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string().nullish(),
+  "targetName": zod.string().nullish(),
+  "targetUnitId": zod.number().nullish()
+})
+export const ListEnergyActionPlansResponse = zod.array(ListEnergyActionPlansResponseItem)
+
+
+/**
+ * @summary Eylem planı ekle
+ */
+export const CreateEnergyActionPlanBody = zod.object({
+  "targetId": zod.number(),
+  "title": zod.string(),
+  "description": zod.string().optional(),
+  "responsibleName": zod.string().optional(),
+  "priority": zod.string().optional(),
+  "expectedSavingValue": zod.number().optional(),
+  "expectedSavingUnit": zod.string().optional(),
+  "expectedCostSaving": zod.number().optional(),
+  "investmentCost": zod.number().optional(),
+  "paybackMonths": zod.number().optional(),
+  "startDate": zod.string().optional(),
+  "dueDate": zod.string().optional(),
+  "completionDate": zod.string().optional(),
+  "progressPercent": zod.number().optional(),
+  "status": zod.string().optional(),
+  "isVap": zod.boolean().optional(),
+  "notes": zod.string().optional()
+})
+
+
+/**
+ * @summary Eylem planı güncelle
+ */
+export const UpdateEnergyActionPlanParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateEnergyActionPlanBody = zod.object({
+  "title": zod.string().optional(),
+  "description": zod.string().optional(),
+  "responsibleName": zod.string().optional(),
+  "priority": zod.string().optional(),
+  "expectedSavingValue": zod.number().optional(),
+  "expectedSavingUnit": zod.string().optional(),
+  "expectedCostSaving": zod.number().optional(),
+  "investmentCost": zod.number().optional(),
+  "paybackMonths": zod.number().optional(),
+  "startDate": zod.string().optional(),
+  "dueDate": zod.string().optional(),
+  "completionDate": zod.string().optional(),
+  "progressPercent": zod.number().optional(),
+  "status": zod.string().optional(),
+  "isVap": zod.boolean().optional(),
+  "notes": zod.string().optional()
+})
+
+export const UpdateEnergyActionPlanResponse = zod.object({
+  "id": zod.number(),
+  "companyId": zod.number(),
+  "targetId": zod.number(),
+  "title": zod.string(),
+  "description": zod.string().nullish(),
+  "responsibleUserId": zod.number().nullish(),
+  "responsibleName": zod.string().nullish(),
+  "priority": zod.string().describe('low | medium | high'),
+  "expectedSavingValue": zod.number().nullish(),
+  "expectedSavingUnit": zod.string().nullish(),
+  "expectedCostSaving": zod.number().nullish(),
+  "investmentCost": zod.number().nullish(),
+  "paybackMonths": zod.number().nullish(),
+  "startDate": zod.string().nullish(),
+  "dueDate": zod.string().nullish(),
+  "completionDate": zod.string().nullish(),
+  "progressPercent": zod.number(),
+  "status": zod.string().describe('planned | in_progress | completed | delayed | cancelled'),
+  "isVap": zod.boolean(),
+  "notes": zod.string().nullish(),
+  "createdBy": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string().nullish(),
+  "targetName": zod.string().nullish(),
+  "targetUnitId": zod.number().nullish()
+})
+
+
+/**
+ * @summary Eylem planı sil
+ */
+export const DeleteEnergyActionPlanParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+/**
+ * @summary Hedef gerçekleşme kayıtlarını listele
+ */
+export const ListEnergyTargetProgressQueryParams = zod.object({
+  "targetId": zod.coerce.number().optional()
+})
+
+export const ListEnergyTargetProgressResponseItem = zod.object({
+  "id": zod.number(),
+  "companyId": zod.number(),
+  "targetId": zod.number(),
+  "periodYear": zod.number(),
+  "periodMonth": zod.number().nullish(),
+  "actualValue": zod.number(),
+  "actualSavingValue": zod.number().nullish(),
+  "comment": zod.string().nullish(),
+  "recordedBy": zod.string().nullish(),
+  "recordedAt": zod.string(),
+  "targetUnitId": zod.number().nullish()
+})
+export const ListEnergyTargetProgressResponse = zod.array(ListEnergyTargetProgressResponseItem)
+
+
+/**
+ * @summary Gerçekleşme kaydı ekle
+ */
+export const CreateEnergyTargetProgressBody = zod.object({
+  "targetId": zod.number(),
+  "periodYear": zod.number(),
+  "periodMonth": zod.number().optional(),
+  "actualValue": zod.number(),
+  "actualSavingValue": zod.number().optional(),
+  "comment": zod.string().optional()
+})
+
+
+/**
+ * @summary Gerçekleşme kaydını sil
+ */
+export const DeleteEnergyTargetProgressParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+/**
+ * @summary VAP projelerini listele
+ */
+export const ListVapProjectsResponseItem = zod.object({
+  "id": zod.number(),
+  "companyId": zod.number(),
+  "actionPlanId": zod.number(),
+  "projectCode": zod.string().nullish(),
+  "projectTitle": zod.string(),
+  "projectType": zod.string().nullish(),
+  "currentSituation": zod.string().nullish(),
+  "proposedSolution": zod.string().nullish(),
+  "technicalDescription": zod.string().nullish(),
+  "annualEnergySavingValue": zod.number().nullish(),
+  "annualEnergySavingUnit": zod.string().nullish(),
+  "annualCostSaving": zod.number().nullish(),
+  "investmentCost": zod.number().nullish(),
+  "paybackMonths": zod.number().nullish(),
+  "co2ReductionTon": zod.number().nullish(),
+  "measurementVerificationMethod": zod.string().nullish(),
+  "incentiveStatus": zod.string().nullish(),
+  "feasibilityStatus": zod.string().nullish(),
+  "startDate": zod.string().nullish(),
+  "endDate": zod.string().nullish(),
+  "status": zod.string().describe('idea | feasibility | planned | in_progress | completed | cancelled'),
+  "notes": zod.string().nullish(),
+  "createdBy": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string().nullish(),
+  "actionPlanTitle": zod.string().nullish(),
+  "actionPlanStatus": zod.string().nullish(),
+  "targetId": zod.number().nullish(),
+  "targetName": zod.string().nullish(),
+  "targetUnitId": zod.number().nullish(),
+  "targetEnergySourceId": zod.number().nullish()
+})
+export const ListVapProjectsResponse = zod.array(ListVapProjectsResponseItem)
+
+
+/**
+ * @summary VAP projesi oluştur
+ */
+export const CreateVapProjectBody = zod.object({
+  "actionPlanId": zod.number(),
+  "projectCode": zod.string().optional(),
+  "projectTitle": zod.string(),
+  "projectType": zod.string().optional(),
+  "currentSituation": zod.string().optional(),
+  "proposedSolution": zod.string().optional(),
+  "technicalDescription": zod.string().optional(),
+  "annualEnergySavingValue": zod.number().optional(),
+  "annualEnergySavingUnit": zod.string().optional(),
+  "annualCostSaving": zod.number().optional(),
+  "investmentCost": zod.number().optional(),
+  "paybackMonths": zod.number().optional(),
+  "co2ReductionTon": zod.number().optional(),
+  "measurementVerificationMethod": zod.string().optional(),
+  "incentiveStatus": zod.string().optional(),
+  "feasibilityStatus": zod.string().optional(),
+  "startDate": zod.string().optional(),
+  "endDate": zod.string().optional(),
+  "status": zod.string().optional(),
+  "notes": zod.string().optional()
+})
+
+
+/**
+ * @summary VAP projesi güncelle
+ */
+export const UpdateVapProjectParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateVapProjectBody = zod.object({
+  "projectCode": zod.string().optional(),
+  "projectTitle": zod.string().optional(),
+  "projectType": zod.string().optional(),
+  "currentSituation": zod.string().optional(),
+  "proposedSolution": zod.string().optional(),
+  "technicalDescription": zod.string().optional(),
+  "annualEnergySavingValue": zod.number().optional(),
+  "annualEnergySavingUnit": zod.string().optional(),
+  "annualCostSaving": zod.number().optional(),
+  "investmentCost": zod.number().optional(),
+  "paybackMonths": zod.number().optional(),
+  "co2ReductionTon": zod.number().optional(),
+  "measurementVerificationMethod": zod.string().optional(),
+  "incentiveStatus": zod.string().optional(),
+  "feasibilityStatus": zod.string().optional(),
+  "startDate": zod.string().optional(),
+  "endDate": zod.string().optional(),
+  "status": zod.string().optional(),
+  "notes": zod.string().optional()
+})
+
+export const UpdateVapProjectResponse = zod.object({
+  "id": zod.number(),
+  "companyId": zod.number(),
+  "actionPlanId": zod.number(),
+  "projectCode": zod.string().nullish(),
+  "projectTitle": zod.string(),
+  "projectType": zod.string().nullish(),
+  "currentSituation": zod.string().nullish(),
+  "proposedSolution": zod.string().nullish(),
+  "technicalDescription": zod.string().nullish(),
+  "annualEnergySavingValue": zod.number().nullish(),
+  "annualEnergySavingUnit": zod.string().nullish(),
+  "annualCostSaving": zod.number().nullish(),
+  "investmentCost": zod.number().nullish(),
+  "paybackMonths": zod.number().nullish(),
+  "co2ReductionTon": zod.number().nullish(),
+  "measurementVerificationMethod": zod.string().nullish(),
+  "incentiveStatus": zod.string().nullish(),
+  "feasibilityStatus": zod.string().nullish(),
+  "startDate": zod.string().nullish(),
+  "endDate": zod.string().nullish(),
+  "status": zod.string().describe('idea | feasibility | planned | in_progress | completed | cancelled'),
+  "notes": zod.string().nullish(),
+  "createdBy": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string().nullish(),
+  "actionPlanTitle": zod.string().nullish(),
+  "actionPlanStatus": zod.string().nullish(),
+  "targetId": zod.number().nullish(),
+  "targetName": zod.string().nullish(),
+  "targetUnitId": zod.number().nullish(),
+  "targetEnergySourceId": zod.number().nullish()
+})
+
+
+/**
+ * @summary VAP projesi sil
+ */
+export const DeleteVapProjectParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+/**
  * @summary Risk ve fırsatlar listesi
  */
 export const ListRisksQueryParams = zod.object({

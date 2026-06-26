@@ -1,7 +1,13 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useUnit } from "@/context/UnitContext";
 import { useCompany } from "@/context/CompanyContext";
 import { useAuth } from "@/context/AuthContext";
+import {
+  useListVapProjects, getListVapProjectsQueryKey,
+  useCreateVapProject, useUpdateVapProject, useDeleteVapProject,
+  useListEnergyActionPlans, getListEnergyActionPlansQueryKey,
+} from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,8 +19,6 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Plus, Pencil, Trash2, Zap, FolderOpen } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import axios from "axios";
-
 const VAP_STATUSES = [
   { value: "idea", label: "Fikir", color: "bg-muted text-muted-foreground" },
   { value: "feasibility", label: "Fizibilite", color: "bg-purple-500/20 text-purple-400" },
@@ -79,39 +83,27 @@ export default function VapProjects() {
   const { unitId } = useUnit();
   const { companyId } = useCompany();
   const { user } = useAuth();
+  const queryClient = useQueryClient();
 
-  const [projects, setProjects] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [vapActions, setVapActions] = useState<any[]>([]); // is_vap=true action plans
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState<VapForm>(EMPTY_FORM);
   const [deleteId, setDeleteId] = useState<number | null>(null);
 
-  const authHeader = () => {
-    const token = localStorage.getItem("eys_token");
-    return token ? { Authorization: `Bearer ${token}` } : {};
-  };
+  const { data: projectsData, isLoading: loading } = useListVapProjects(
+    { query: { queryKey: getListVapProjectsQueryKey() } },
+  );
+  const projects = projectsData ?? [];
 
-  async function loadProjects() {
-    setLoading(true);
-    try {
-      const r = await axios.get("/api/vap-projects", { headers: authHeader() });
-      setProjects(r.data);
-    } catch { setProjects([]); } finally { setLoading(false); }
-  }
+  const { data: allActionsData } = useListEnergyActionPlans(
+    undefined,
+    { query: { queryKey: getListEnergyActionPlansQueryKey(undefined) } },
+  );
+  const vapActions = (allActionsData ?? []).filter((a: any) => a.isVap);
 
-  async function loadVapActions() {
-    try {
-      const r = await axios.get("/api/energy-action-plans", { headers: authHeader() });
-      setVapActions(r.data.filter((a: any) => a.isVap));
-    } catch { setVapActions([]); }
-  }
-
-  useEffect(() => {
-    loadProjects();
-    loadVapActions();
-  }, [unitId, companyId]);
+  const createVap = useCreateVapProject();
+  const updateVap = useUpdateVapProject();
+  const deleteVap = useDeleteVapProject();
 
   // VAP actions that don't yet have a project
   const actionIdsWithProject = new Set(projects.map((p) => p.actionPlanId));
@@ -181,55 +173,83 @@ export default function VapProjects() {
     });
   }
 
-  async function handleSave() {
+  function handleSave() {
     if (!form.actionPlanId) { toast({ title: "Eylem planı seçiniz", variant: "destructive" }); return; }
     if (!form.projectTitle) { toast({ title: "Proje başlığı zorunludur", variant: "destructive" }); return; }
 
-    const payload = {
-      actionPlanId: form.actionPlanId,
-      projectCode: form.projectCode || null,
-      projectTitle: form.projectTitle,
-      projectType: form.projectType || null,
-      currentSituation: form.currentSituation || null,
-      proposedSolution: form.proposedSolution || null,
-      technicalDescription: form.technicalDescription || null,
-      annualEnergySavingValue: form.annualEnergySavingValue || null,
-      annualEnergySavingUnit: form.annualEnergySavingUnit || null,
-      annualCostSaving: form.annualCostSaving || null,
-      investmentCost: form.investmentCost || null,
-      paybackMonths: form.paybackMonths || null,
-      co2ReductionTon: form.co2ReductionTon || null,
-      measurementVerificationMethod: form.measurementVerificationMethod || null,
-      incentiveStatus: form.incentiveStatus,
-      feasibilityStatus: form.feasibilityStatus,
-      startDate: form.startDate || null,
-      endDate: form.endDate || null,
-      status: form.status,
-      notes: form.notes || null,
-    };
-    try {
-      if (editingId !== null) {
-        await axios.put(`/api/vap-projects/${editingId}`, payload, { headers: authHeader() });
-        toast({ title: "VAP güncellendi" });
-      } else {
-        await axios.post("/api/vap-projects", payload, { headers: authHeader() });
-        toast({ title: "VAP oluşturuldu" });
-      }
+    const toNum = (v: string) => v !== "" && !isNaN(parseFloat(v)) ? parseFloat(v) : undefined;
+
+    const invalidate = () => {
+      queryClient.invalidateQueries({ queryKey: getListVapProjectsQueryKey() });
+      queryClient.invalidateQueries({ queryKey: getListEnergyActionPlansQueryKey(undefined) });
       setOpen(false);
-      await loadProjects();
-      await loadVapActions();
-    } catch (e: any) {
-      toast({ title: e?.response?.data?.error ?? "İşlem başarısız", variant: "destructive" });
+    };
+
+    if (editingId !== null) {
+      const payload = {
+        projectCode: form.projectCode || undefined,
+        projectTitle: form.projectTitle,
+        projectType: form.projectType || undefined,
+        currentSituation: form.currentSituation || undefined,
+        proposedSolution: form.proposedSolution || undefined,
+        technicalDescription: form.technicalDescription || undefined,
+        annualEnergySavingValue: toNum(form.annualEnergySavingValue),
+        annualEnergySavingUnit: form.annualEnergySavingUnit || undefined,
+        annualCostSaving: toNum(form.annualCostSaving),
+        investmentCost: toNum(form.investmentCost),
+        paybackMonths: toNum(form.paybackMonths),
+        co2ReductionTon: toNum(form.co2ReductionTon),
+        measurementVerificationMethod: form.measurementVerificationMethod || undefined,
+        incentiveStatus: form.incentiveStatus,
+        feasibilityStatus: form.feasibilityStatus,
+        startDate: form.startDate || undefined,
+        endDate: form.endDate || undefined,
+        status: form.status,
+        notes: form.notes || undefined,
+      };
+      updateVap.mutate({ id: editingId, data: payload }, {
+        onSuccess: () => { invalidate(); toast({ title: "VAP güncellendi" }); },
+        onError: (e: any) => toast({ title: e?.response?.data?.error ?? "Güncelleme başarısız", variant: "destructive" }),
+      });
+    } else {
+      const payload = {
+        actionPlanId: parseInt(form.actionPlanId),
+        projectCode: form.projectCode || undefined,
+        projectTitle: form.projectTitle,
+        projectType: form.projectType || undefined,
+        currentSituation: form.currentSituation || undefined,
+        proposedSolution: form.proposedSolution || undefined,
+        technicalDescription: form.technicalDescription || undefined,
+        annualEnergySavingValue: toNum(form.annualEnergySavingValue),
+        annualEnergySavingUnit: form.annualEnergySavingUnit || undefined,
+        annualCostSaving: toNum(form.annualCostSaving),
+        investmentCost: toNum(form.investmentCost),
+        paybackMonths: toNum(form.paybackMonths),
+        co2ReductionTon: toNum(form.co2ReductionTon),
+        measurementVerificationMethod: form.measurementVerificationMethod || undefined,
+        incentiveStatus: form.incentiveStatus,
+        feasibilityStatus: form.feasibilityStatus,
+        startDate: form.startDate || undefined,
+        endDate: form.endDate || undefined,
+        status: form.status,
+        notes: form.notes || undefined,
+      };
+      createVap.mutate({ data: payload }, {
+        onSuccess: () => { invalidate(); toast({ title: "VAP oluşturuldu" }); },
+        onError: (e: any) => toast({ title: e?.response?.data?.error ?? "Oluşturma başarısız", variant: "destructive" }),
+      });
     }
   }
 
-  async function handleDelete(id: number) {
-    try {
-      await axios.delete(`/api/vap-projects/${id}`, { headers: authHeader() });
-      toast({ title: "VAP silindi" });
-      setDeleteId(null);
-      await loadProjects();
-    } catch { toast({ title: "Silme başarısız", variant: "destructive" }); }
+  function handleDelete(id: number) {
+    deleteVap.mutate({ id }, {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getListVapProjectsQueryKey() });
+        setDeleteId(null);
+        toast({ title: "VAP silindi" });
+      },
+      onError: () => toast({ title: "Silme başarısız", variant: "destructive" }),
+    });
   }
 
   // ─── Summary Stats ────────────────────────────────────────

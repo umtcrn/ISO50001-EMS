@@ -11,6 +11,12 @@ tags:
     description: Health operations
   - name: targets
     description: Enerji hedefleri ve EnPI takibi
+  - name: action-plans
+    description: Eylem planları
+  - name: target-progress
+    description: Hedef gerçekleşme kayıtları
+  - name: vap-projects
+    description: Verimlilik Artırıcı Projeler (VAP)
   - name: units
     description: Birim yönetimi
   - name: meters
@@ -577,6 +583,208 @@ paths:
       operationId: deleteTarget
       tags: [targets]
       summary: Enerji hedefini sil
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  # ── ENERGY ACTION PLANS ───────────────────────────────────
+  /energy-action-plans:
+    get:
+      operationId: listEnergyActionPlans
+      tags: [action-plans]
+      summary: Eylem planlarını listele
+      parameters:
+        - name: targetId
+          in: query
+          required: false
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/EnergyActionPlan"
+    post:
+      operationId: createEnergyActionPlan
+      tags: [action-plans]
+      summary: Eylem planı ekle
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EnergyActionPlanInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnergyActionPlan"
+
+  /energy-action-plans/{id}:
+    put:
+      operationId: updateEnergyActionPlan
+      tags: [action-plans]
+      summary: Eylem planı güncelle
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EnergyActionPlanUpdate"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnergyActionPlan"
+    delete:
+      operationId: deleteEnergyActionPlan
+      tags: [action-plans]
+      summary: Eylem planı sil
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  # ── ENERGY TARGET PROGRESS ────────────────────────────────
+  /energy-target-progress:
+    get:
+      operationId: listEnergyTargetProgress
+      tags: [target-progress]
+      summary: Hedef gerçekleşme kayıtlarını listele
+      parameters:
+        - name: targetId
+          in: query
+          required: false
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/EnergyTargetProgressRecord"
+    post:
+      operationId: createEnergyTargetProgress
+      tags: [target-progress]
+      summary: Gerçekleşme kaydı ekle
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EnergyTargetProgressInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnergyTargetProgressRecord"
+
+  /energy-target-progress/{id}:
+    delete:
+      operationId: deleteEnergyTargetProgress
+      tags: [target-progress]
+      summary: Gerçekleşme kaydını sil
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  # ── VAP PROJECTS ──────────────────────────────────────────
+  /vap-projects:
+    get:
+      operationId: listVapProjects
+      tags: [vap-projects]
+      summary: VAP projelerini listele
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/VapProject"
+    post:
+      operationId: createVapProject
+      tags: [vap-projects]
+      summary: VAP projesi oluştur
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VapProjectInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VapProject"
+
+  /vap-projects/{id}:
+    put:
+      operationId: updateVapProject
+      tags: [vap-projects]
+      summary: VAP projesi güncelle
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VapProjectUpdate"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VapProject"
+    delete:
+      operationId: deleteVapProject
+      tags: [vap-projects]
+      summary: VAP projesi sil
       parameters:
         - name: id
           in: path
@@ -2042,3 +2250,337 @@ components:
           type: string
         isActive:
           type: boolean
+
+    # ── EnergyActionPlan ──────────────────────────────────────
+    EnergyActionPlan:
+      type: object
+      required: [id, companyId, targetId, title, priority, progressPercent, status, isVap, createdAt]
+      properties:
+        id:
+          type: integer
+        companyId:
+          type: integer
+        targetId:
+          type: integer
+        title:
+          type: string
+        description:
+          type: ["string", "null"]
+        responsibleUserId:
+          type: ["integer", "null"]
+        responsibleName:
+          type: ["string", "null"]
+        priority:
+          type: string
+          description: "low | medium | high"
+        expectedSavingValue:
+          type: ["number", "null"]
+        expectedSavingUnit:
+          type: ["string", "null"]
+        expectedCostSaving:
+          type: ["number", "null"]
+        investmentCost:
+          type: ["number", "null"]
+        paybackMonths:
+          type: ["number", "null"]
+        startDate:
+          type: ["string", "null"]
+        dueDate:
+          type: ["string", "null"]
+        completionDate:
+          type: ["string", "null"]
+        progressPercent:
+          type: number
+        status:
+          type: string
+          description: "planned | in_progress | completed | delayed | cancelled"
+        isVap:
+          type: boolean
+        notes:
+          type: ["string", "null"]
+        createdBy:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+        updatedAt:
+          type: ["string", "null"]
+        targetName:
+          type: ["string", "null"]
+        targetUnitId:
+          type: ["integer", "null"]
+
+    EnergyActionPlanInput:
+      type: object
+      required: [targetId, title]
+      properties:
+        targetId:
+          type: integer
+        title:
+          type: string
+        description:
+          type: string
+        responsibleName:
+          type: string
+        priority:
+          type: string
+        expectedSavingValue:
+          type: number
+        expectedSavingUnit:
+          type: string
+        expectedCostSaving:
+          type: number
+        investmentCost:
+          type: number
+        paybackMonths:
+          type: number
+        startDate:
+          type: string
+        dueDate:
+          type: string
+        completionDate:
+          type: string
+        progressPercent:
+          type: number
+        status:
+          type: string
+        isVap:
+          type: boolean
+        notes:
+          type: string
+
+    EnergyActionPlanUpdate:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        responsibleName:
+          type: string
+        priority:
+          type: string
+        expectedSavingValue:
+          type: number
+        expectedSavingUnit:
+          type: string
+        expectedCostSaving:
+          type: number
+        investmentCost:
+          type: number
+        paybackMonths:
+          type: number
+        startDate:
+          type: string
+        dueDate:
+          type: string
+        completionDate:
+          type: string
+        progressPercent:
+          type: number
+        status:
+          type: string
+        isVap:
+          type: boolean
+        notes:
+          type: string
+
+    # ── EnergyTargetProgress ──────────────────────────────────
+    EnergyTargetProgressRecord:
+      type: object
+      required: [id, companyId, targetId, periodYear, actualValue, recordedAt]
+      properties:
+        id:
+          type: integer
+        companyId:
+          type: integer
+        targetId:
+          type: integer
+        periodYear:
+          type: integer
+        periodMonth:
+          type: ["integer", "null"]
+        actualValue:
+          type: number
+        actualSavingValue:
+          type: ["number", "null"]
+        comment:
+          type: ["string", "null"]
+        recordedBy:
+          type: ["string", "null"]
+        recordedAt:
+          type: string
+        targetUnitId:
+          type: ["integer", "null"]
+
+    EnergyTargetProgressInput:
+      type: object
+      required: [targetId, periodYear, actualValue]
+      properties:
+        targetId:
+          type: integer
+        periodYear:
+          type: integer
+        periodMonth:
+          type: integer
+        actualValue:
+          type: number
+        actualSavingValue:
+          type: number
+        comment:
+          type: string
+
+    # ── VapProject ────────────────────────────────────────────
+    VapProject:
+      type: object
+      required: [id, companyId, actionPlanId, projectTitle, status, createdAt]
+      properties:
+        id:
+          type: integer
+        companyId:
+          type: integer
+        actionPlanId:
+          type: integer
+        projectCode:
+          type: ["string", "null"]
+        projectTitle:
+          type: string
+        projectType:
+          type: ["string", "null"]
+        currentSituation:
+          type: ["string", "null"]
+        proposedSolution:
+          type: ["string", "null"]
+        technicalDescription:
+          type: ["string", "null"]
+        annualEnergySavingValue:
+          type: ["number", "null"]
+        annualEnergySavingUnit:
+          type: ["string", "null"]
+        annualCostSaving:
+          type: ["number", "null"]
+        investmentCost:
+          type: ["number", "null"]
+        paybackMonths:
+          type: ["number", "null"]
+        co2ReductionTon:
+          type: ["number", "null"]
+        measurementVerificationMethod:
+          type: ["string", "null"]
+        incentiveStatus:
+          type: ["string", "null"]
+        feasibilityStatus:
+          type: ["string", "null"]
+        startDate:
+          type: ["string", "null"]
+        endDate:
+          type: ["string", "null"]
+        status:
+          type: string
+          description: "idea | feasibility | planned | in_progress | completed | cancelled"
+        notes:
+          type: ["string", "null"]
+        createdBy:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+        updatedAt:
+          type: ["string", "null"]
+        actionPlanTitle:
+          type: ["string", "null"]
+        actionPlanStatus:
+          type: ["string", "null"]
+        targetId:
+          type: ["integer", "null"]
+        targetName:
+          type: ["string", "null"]
+        targetUnitId:
+          type: ["integer", "null"]
+        targetEnergySourceId:
+          type: ["integer", "null"]
+
+    VapProjectInput:
+      type: object
+      required: [actionPlanId, projectTitle]
+      properties:
+        actionPlanId:
+          type: integer
+        projectCode:
+          type: string
+        projectTitle:
+          type: string
+        projectType:
+          type: string
+        currentSituation:
+          type: string
+        proposedSolution:
+          type: string
+        technicalDescription:
+          type: string
+        annualEnergySavingValue:
+          type: number
+        annualEnergySavingUnit:
+          type: string
+        annualCostSaving:
+          type: number
+        investmentCost:
+          type: number
+        paybackMonths:
+          type: number
+        co2ReductionTon:
+          type: number
+        measurementVerificationMethod:
+          type: string
+        incentiveStatus:
+          type: string
+        feasibilityStatus:
+          type: string
+        startDate:
+          type: string
+        endDate:
+          type: string
+        status:
+          type: string
+        notes:
+          type: string
+
+    VapProjectUpdate:
+      type: object
+      properties:
+        projectCode:
+          type: string
+        projectTitle:
+          type: string
+        projectType:
+          type: string
+        currentSituation:
+          type: string
+        proposedSolution:
+          type: string
+        technicalDescription:
+          type: string
+        annualEnergySavingValue:
+          type: number
+        annualEnergySavingUnit:
+          type: string
+        annualCostSaving:
+          type: number
+        investmentCost:
+          type: number
+        paybackMonths:
+          type: number
+        co2ReductionTon:
+          type: number
+        measurementVerificationMethod:
+          type: string
+        incentiveStatus:
+          type: string
+        feasibilityStatus:
+          type: string
+        startDate:
+          type: string
+        endDate:
+          type: string
+        status:
+          type: string
+        notes:
+          type: string
