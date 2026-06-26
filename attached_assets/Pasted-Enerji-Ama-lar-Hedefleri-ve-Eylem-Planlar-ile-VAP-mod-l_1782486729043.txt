@@ -1,0 +1,209 @@
+Enerji Amaçları, Hedefleri ve Eylem Planları ile VAP modülü için standart CSV export özelliği ekle.
+
+Amaç:
+Kullanıcı iki ayrı standart çıktı alabilsin:
+
+1. Enerji Amaçları, Hedefleri ve Eylem Planı Tablosu
+2. Verimlilik Artırıcı Projeler / VAP Tablosu
+
+Önemli karar:
+- Bu aşamada özel firma doküman şablonu geliştirme.
+- Bu aşamada Word/PDF üretme.
+- Bu aşamada bulk import/export yapma.
+- Sadece standart CSV export ekle.
+- Ancak ileride firma bazlı Word/Excel/PDF özel doküman şablonları destekleneceği için export kodunu modüler yaz.
+- Veri toplama, kolon oluşturma ve dosya çıktısı üretme mantığını mümkünse ayrı helper fonksiyonlara böl.
+- İleride şirket bazlı şablon motoruna taşınabilecek şekilde sade ve anlaşılır yapı kur.
+
+Genel kurallar:
+- Yeni veri modeli oluşturma.
+- Mevcut tabloları değiştirme.
+- Migration ekleme.
+- Mevcut kayıtları bozma.
+- UI’ı büyük ölçüde değiştirme.
+- Mevcut auth, company_id ve unit_id yetki kontrollerini koru.
+- Multi-tenant izolasyonu kesinlikle korunmalı.
+- Admin sadece kendi şirketindeki tüm birimlerin verisini export edebilsin.
+- Normal kullanıcı sadece yetkili olduğu birimin verisini export edebilsin.
+- Önce mevcut export/PDF/CSV altyapısını analiz et.
+- Eğer projede halihazırda CSV export helper varsa onu kullan.
+- Eğer yoksa basit, güvenli ve tekrar kullanılabilir CSV helper oluştur.
+- Türkçe karakterler Excel’de bozulmamalı.
+- CSV dosyalarında UTF-8 BOM kullan.
+- CSV delimiter olarak noktalı virgül ; kullan.
+- Hücre içindeki ;, satır sonu ve çift tırnak karakterlerini doğru escape et.
+- Axios ekleme. Mevcut OpenAPI/Orval/API client standardına uy.
+
+1) Enerji Amaçları, Hedefleri ve Eylem Planı exportu
+
+Yeni endpoint ekle:
+GET /api/energy-targets/export
+
+Query parametreleri:
+- year optional
+- unitId optional
+- status optional
+- format optional, varsayılan csv
+
+Export içeriği şu kolonları içersin:
+- Yıl
+- Birim
+- Alt Birim
+- Enerji Kaynağı
+- İlgili ÖEK
+- Enerji Amacı
+- Enerji Hedefi
+- Hedef Tipi
+- Baz Yıl
+- Baz Değer
+- Hedef Yıl
+- Hedef Değer
+- Gerçekleşen Değer
+- Ölçü Birimi
+- Hedef Azaltım Oranı
+- Hedef Durumu
+- Eylem Planı
+- Sorumlu
+- Başlangıç Tarihi
+- Bitiş Tarihi
+- Öncelik
+- Beklenen Tasarruf
+- Beklenen Yıllık Mali Tasarruf
+- Yatırım Maliyeti
+- Geri Ödeme Süresi
+- Eylem Durumu
+- İlerleme
+- VAP mı?
+- Notlar
+
+Veri ilişkisi:
+- energy_targets ana tablo
+- energy_action_plans ile left join
+- units, sub_units, energy_sources ve varsa SEU bilgisi join ile gösterilsin
+- Bir hedefin birden fazla eylemi varsa exportta her eylem ayrı satır olsun
+- Hedefin eylemi yoksa hedef yine satır olarak görünsün, eylem kolonları boş kalsın
+- Hedefe bağlı action plan notu varsa Notlar kolonunda eylem notu gösterilebilir
+- Hedefin action planı yoksa Notlar kolonunda hedef notu gösterilebilir
+
+Dosya adı:
+- enerji-amac-hedef-eylem-plani.csv
+- year filtresi varsa: enerji-amac-hedef-eylem-plani-2026.csv
+
+Frontend:
+- /hedefler sayfasına sade bir “CSV Export” butonu ekle
+- Mevcut filtreler varsa onlara göre query parametreleri gönder
+- Filtre yoksa tüm yetkili kayıtları export et
+- Export sırasında loading durumu göster
+- Hata olursa backend error mesajını kullanıcıya göster
+
+2) VAP exportu
+
+Yeni endpoint ekle:
+GET /api/vap-projects/export
+
+Query parametreleri:
+- year optional
+- unitId optional
+- status optional
+- format optional, varsayılan csv
+
+Export içeriği şu kolonları içersin:
+- Proje Kodu
+- VAP Adı
+- Bağlı Hedef
+- Bağlı Eylem Planı
+- Birim
+- Alt Birim
+- Enerji Kaynağı
+- Proje Türü
+- Mevcut Durum
+- Önerilen Çözüm
+- Teknik Açıklama
+- Yıllık Enerji Tasarrufu
+- Yıllık Enerji Tasarrufu Birimi
+- Yıllık Mali Tasarruf
+- Yatırım Maliyeti
+- Geri Ödeme Süresi
+- CO2 Azaltımı
+- Fizibilite Durumu
+- Teşvik/Destek Durumu
+- Başlangıç Tarihi
+- Bitiş Tarihi
+- Proje Durumu
+- Notlar
+
+Veri ilişkisi:
+- vap_projects ana tablo
+- energy_action_plans ile join
+- energy_targets ile join
+- units, sub_units, energy_sources ile join
+- Sadece VAP projeleri export edilsin
+- is_vap=false olan normal eylemler burada görünmesin
+
+Dosya adı:
+- vap-projeleri.csv
+- year filtresi varsa: vap-projeleri-2026.csv
+
+Frontend:
+- /vap-projeler sayfasına sade bir “CSV Export” butonu ekle
+- Mevcut filtreler varsa onlara göre query parametreleri gönder
+- Filtre yoksa tüm yetkili VAP kayıtlarını export et
+- Export sırasında loading durumu göster
+- Hata olursa backend error mesajını kullanıcıya göster
+
+API güvenliği:
+- Tüm export endpointlerinde auth zorunlu
+- company_id filtresi zorunlu
+- Admin sadece kendi şirketinin tüm verisini export edebilsin
+- Normal kullanıcı sadece kendi yetkili unit_id kapsamındaki veriyi export edebilsin
+- Query parametreleri validate edilsin
+- Hata durumlarında açık error mesajı dönülsün
+- Export endpointleri başka şirketin verisini hiçbir durumda döndürmemeli
+
+OpenAPI / Orval:
+- Yeni export endpointlerini OpenAPI spec’e ekle
+- Gerekirse Orval codegen çalıştır
+- Frontend export çağrıları mevcut API client standardına uygun olsun
+- Axios ekleme
+- Eğer dosya indirme için Orval uygun değilse mevcut apiFetch/client standardına uygun güvenli download helper kullan
+- Ama proje standardını bozma
+
+CSV helper:
+- Tekrar kullanılabilir bir helper oluştur veya mevcut helper’ı kullan
+- UTF-8 BOM ekle
+- delimiter: ;
+- string escape kurallarını uygula
+- null/undefined değerleri boş hücre yap
+- boolean değerlerde kullanıcıya Türkçe göster:
+  - true: Evet
+  - false: Hayır
+- Durum/tip/öncelik enumlarını mümkünse Türkçe label olarak export et
+  Örnek:
+  - active = Devam Ediyor
+  - completed = Tamamlandı
+  - planned = Planlandı
+  - in_progress = Devam Ediyor
+  - high = Yüksek
+  - medium = Orta
+  - low = Düşük
+
+Test:
+- Admin ile enerji hedefleri exportu indiriliyor mu?
+- Admin ile VAP exportu indiriliyor mu?
+- Normal kullanıcı sadece kendi birim verisini export edebiliyor mu?
+- Türkçe karakterler Excel’de düzgün açılıyor mu?
+- Hedefin eylemi yoksa exportta yine görünüyor mu?
+- Bir hedefin birden fazla eylemi varsa her eylem ayrı satır mı?
+- VAP exportta sadece VAP projeleri mi geliyor?
+- is_vap=false olan eylemler VAP exportunda görünmüyor mu?
+- pnpm --filter @workspace/api-spec run codegen gerekiyorsa çalıştır
+- pnpm run typecheck çalıştır
+- ems-dashboard build çalıştır
+- Sonunda değişen dosyaları, eklenen endpointleri ve test sonucunu kısa raporla
+
+Yeni özellik sınırı:
+- Özel doküman şablonu modülü oluşturma.
+- Word/PDF export oluşturma.
+- Excel xlsx oluşturma.
+- Bulk import/export oluşturma.
+- Sadece iki standart CSV exportu ekle.

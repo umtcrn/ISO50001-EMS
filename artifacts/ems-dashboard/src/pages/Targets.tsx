@@ -24,7 +24,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Plus, Pencil, Trash2, Target, CheckCircle2, Clock, Building2,
-  TrendingDown, AlertCircle, BarChart3, ListChecks, Activity,
+  TrendingDown, AlertCircle, BarChart3, ListChecks, Activity, Download,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -168,8 +168,36 @@ export default function Targets() {
   const { toast } = useToast();
   const { unitId } = useUnit();
   const { companyId } = useCompany();
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const isAdmin = user?.role === "admin" || user?.role === "superadmin";
+  const [csvLoading, setCsvLoading] = useState(false);
+
+  async function handleCsvExport() {
+    setCsvLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (unitId !== null) params.set("unitId", unitId.toString());
+      const url = `/api/targets/export${params.size ? "?" + params.toString() : ""}`;
+      const res = await fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        toast({ title: data?.error ?? "Export başarısız", variant: "destructive" });
+        return;
+      }
+      const blob = await res.blob();
+      const disposition = res.headers.get("Content-Disposition") ?? "";
+      const match = disposition.match(/filename\*?=(?:UTF-8'')?([^;]+)/i);
+      const filename = match ? decodeURIComponent(match[1].trim()) : "enerji-amac-hedef-eylem-plani.csv";
+      const objUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = objUrl; a.download = filename; a.click();
+      URL.revokeObjectURL(objUrl);
+    } catch {
+      toast({ title: "Export sırasında hata oluştu", variant: "destructive" });
+    } finally {
+      setCsvLoading(false);
+    }
+  }
   const unitParam = unitId !== null ? { unitId } : companyId !== null ? { companyId } : undefined;
 
   // ── Targets ─────────────────────────────────────────────
@@ -436,6 +464,10 @@ export default function Targets() {
           </h1>
           <p className="text-muted-foreground text-sm mt-1">ISO 50001 — Amaç, hedef ve eylem planı yönetimi</p>
         </div>
+        <Button variant="outline" onClick={handleCsvExport} disabled={csvLoading} className="gap-2">
+          <Download className="h-4 w-4" />
+          {csvLoading ? "İndiriliyor..." : "CSV Export"}
+        </Button>
       </div>
 
       {/* Summary Cards */}

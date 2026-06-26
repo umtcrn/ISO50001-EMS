@@ -27,6 +27,8 @@ export * from './energyTargetProgressRecord';
 export * from './energyTargetUpdate';
 export * from './energyTargetWithProgress';
 export * from './energyTargetWithProgressYearlyProgressItem';
+export * from './exportTargetsCsvParams';
+export * from './exportVapProjectsCsvParams';
 export * from './getDashboardKpiParams';
 export * from './getMonthlyTrendParams';
 export * from './getPerformanceIndicatorsParams';

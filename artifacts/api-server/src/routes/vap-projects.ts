@@ -1,9 +1,155 @@
 import { Router } from "express";
-import { db, vapProjectsTable, energyActionPlansTable, energyTargetsTable, energySourcesTable, unitsTable } from "@workspace/db";
+import { db, vapProjectsTable, energyActionPlansTable, energyTargetsTable, energySourcesTable, unitsTable, subUnitsTable } from "@workspace/db";
 import { eq, and, SQL } from "drizzle-orm";
 import { requireAuth } from "../middlewares/auth.js";
+import {
+  buildCsv, sendCsvResponse,
+  VAP_STATUS_LABELS, FEASIBILITY_STATUS_LABELS, INCENTIVE_STATUS_LABELS,
+} from "../lib/csv-export.js";
 
 const router = Router();
+
+// GET /api/vap-projects/export
+router.get("/vap-projects/export", requireAuth, async (req, res) => {
+  try {
+    const { role, companyId: sessionCompanyId, unitId: sessionUnitId } = req.user!;
+
+    // Non-admin kullanıcıların mutlaka bir birime atanmış olması gerekir
+    if (role !== "admin" && role !== "superadmin" && sessionUnitId === null) {
+      res.status(403).json({ error: "Export için birim yetkisi gerekli" });
+      return;
+    }
+
+    const yearParam = req.query.year ? parseInt(req.query.year as string) : undefined;
+    const statusParam = req.query.status as string | undefined;
+    const unitIdParam = req.query.unitId ? parseInt(req.query.unitId as string) : undefined;
+
+    const rows = await db
+      .select({
+        id: vapProjectsTable.id,
+        projectCode: vapProjectsTable.projectCode,
+        projectTitle: vapProjectsTable.projectTitle,
+        projectType: vapProjectsTable.projectType,
+        currentSituation: vapProjectsTable.currentSituation,
+        proposedSolution: vapProjectsTable.proposedSolution,
+        technicalDescription: vapProjectsTable.technicalDescription,
+        annualEnergySavingValue: vapProjectsTable.annualEnergySavingValue,
+        annualEnergySavingUnit: vapProjectsTable.annualEnergySavingUnit,
+        annualCostSaving: vapProjectsTable.annualCostSaving,
+        investmentCost: vapProjectsTable.investmentCost,
+        paybackMonths: vapProjectsTable.paybackMonths,
+        co2ReductionTon: vapProjectsTable.co2ReductionTon,
+        feasibilityStatus: vapProjectsTable.feasibilityStatus,
+        incentiveStatus: vapProjectsTable.incentiveStatus,
+        startDate: vapProjectsTable.startDate,
+        endDate: vapProjectsTable.endDate,
+        status: vapProjectsTable.status,
+        notes: vapProjectsTable.notes,
+        // Action plan
+        actionPlanTitle: energyActionPlansTable.title,
+        actionPlanStatus: energyActionPlansTable.status,
+        actionPlanIsVap: energyActionPlansTable.isVap,
+        // Target
+        targetName: energyTargetsTable.name,
+        targetUnitId: energyTargetsTable.unitId,
+        targetSubUnitId: energyTargetsTable.subUnitId,
+        targetEnergySourceId: energyTargetsTable.energySourceId,
+        targetYear: energyTargetsTable.targetYear,
+        // Lookups
+        unitName: unitsTable.name,
+        subUnitName: subUnitsTable.name,
+        energySourceName: energySourcesTable.name,
+      })
+      .from(vapProjectsTable)
+      .leftJoin(energyActionPlansTable, eq(vapProjectsTable.actionPlanId, energyActionPlansTable.id))
+      .leftJoin(energyTargetsTable, eq(energyActionPlansTable.targetId, energyTargetsTable.id))
+      .leftJoin(unitsTable, eq(energyTargetsTable.unitId, unitsTable.id))
+      .leftJoin(subUnitsTable, eq(energyTargetsTable.subUnitId, subUnitsTable.id))
+      .leftJoin(energySourcesTable, eq(energyTargetsTable.energySourceId, energySourcesTable.id))
+      .where(eq(vapProjectsTable.companyId, sessionCompanyId))
+      .orderBy(vapProjectsTable.createdAt);
+
+    // ── Yetki filtresi ─────────────────────────────────────────
+    let filtered = rows.filter((r) => r.actionPlanIsVap === true);
+
+    if (role !== "admin" && role !== "superadmin" && sessionUnitId !== null) {
+      filtered = filtered.filter((r) => r.targetUnitId === sessionUnitId);
+    } else if (role === "admin" && unitIdParam !== undefined && !isNaN(unitIdParam)) {
+      filtered = filtered.filter((r) => r.targetUnitId === unitIdParam);
+    }
+
+    // ── Query filtreler ────────────────────────────────────────
+    if (statusParam) {
+      filtered = filtered.filter((r) => r.status === statusParam);
+    }
+    if (yearParam !== undefined && !isNaN(yearParam)) {
+      filtered = filtered.filter((r) => r.targetYear === yearParam);
+    }
+
+    // ── CSV satırları ─────────────────────────────────────────
+    const csvRows = filtered.map((p) => ({
+      projeKodu: p.projectCode ?? "",
+      vapAdi: p.projectTitle ?? "",
+      bagliHedef: p.targetName ?? "",
+      bagliEylemPlani: p.actionPlanTitle ?? "",
+      birim: p.unitName ?? "",
+      altBirim: p.subUnitName ?? "",
+      enerjiKaynagi: p.energySourceName ?? "",
+      projeTuru: p.projectType ?? "",
+      mevcutDurum: p.currentSituation ?? "",
+      onerilenCozum: p.proposedSolution ?? "",
+      teknikAciklama: p.technicalDescription ?? "",
+      yillikEnerjiTasarrufu: p.annualEnergySavingValue,
+      yillikEnerjiTasarrufuBirimi: p.annualEnergySavingUnit ?? "",
+      yillikMaliTasarruf: p.annualCostSaving,
+      yatirimMaliyeti: p.investmentCost,
+      geriOdemeSuresi: p.paybackMonths,
+      co2Azaltimi: p.co2ReductionTon,
+      fizibilite: FEASIBILITY_STATUS_LABELS[p.feasibilityStatus ?? ""] ?? p.feasibilityStatus ?? "",
+      tesvikDestek: INCENTIVE_STATUS_LABELS[p.incentiveStatus ?? ""] ?? p.incentiveStatus ?? "",
+      baslangicTarihi: p.startDate ?? "",
+      bitisTarihi: p.endDate ?? "",
+      projeDurumu: VAP_STATUS_LABELS[p.status ?? ""] ?? p.status ?? "",
+      notlar: p.notes ?? "",
+    }));
+
+    const HEADERS = [
+      { key: "projeKodu", label: "Proje Kodu" },
+      { key: "vapAdi", label: "VAP Adı" },
+      { key: "bagliHedef", label: "Bağlı Hedef" },
+      { key: "bagliEylemPlani", label: "Bağlı Eylem Planı" },
+      { key: "birim", label: "Birim" },
+      { key: "altBirim", label: "Alt Birim" },
+      { key: "enerjiKaynagi", label: "Enerji Kaynağı" },
+      { key: "projeTuru", label: "Proje Türü" },
+      { key: "mevcutDurum", label: "Mevcut Durum" },
+      { key: "onerilenCozum", label: "Önerilen Çözüm" },
+      { key: "teknikAciklama", label: "Teknik Açıklama" },
+      { key: "yillikEnerjiTasarrufu", label: "Yıllık Enerji Tasarrufu" },
+      { key: "yillikEnerjiTasarrufuBirimi", label: "Yıllık Enerji Tasarrufu Birimi" },
+      { key: "yillikMaliTasarruf", label: "Yıllık Mali Tasarruf" },
+      { key: "yatirimMaliyeti", label: "Yatırım Maliyeti" },
+      { key: "geriOdemeSuresi", label: "Geri Ödeme Süresi (ay)" },
+      { key: "co2Azaltimi", label: "CO2 Azaltımı (ton)" },
+      { key: "fizibilite", label: "Fizibilite Durumu" },
+      { key: "tesvikDestek", label: "Teşvik/Destek Durumu" },
+      { key: "baslangicTarihi", label: "Başlangıç Tarihi" },
+      { key: "bitisTarihi", label: "Bitiş Tarihi" },
+      { key: "projeDurumu", label: "Proje Durumu" },
+      { key: "notlar", label: "Notlar" },
+    ];
+
+    const filename = yearParam && !isNaN(yearParam)
+      ? `vap-projeleri-${yearParam}.csv`
+      : "vap-projeleri.csv";
+
+    const csv = buildCsv(HEADERS, csvRows);
+    sendCsvResponse(res, filename, csv);
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "VAP CSV export hatası" });
+  }
+});
 
 // GET /api/vap-projects
 router.get("/vap-projects", requireAuth, async (req, res) => {

@@ -1,7 +1,11 @@
 import { Router } from "express";
-import { db, energyTargetsTable, consumptionTable, metersTable } from "@workspace/db";
+import { db, energyTargetsTable, consumptionTable, metersTable, energyActionPlansTable, unitsTable, subUnitsTable, energySourcesTable, seuAssessmentsTable } from "@workspace/db";
 import { eq, and, SQL, inArray, sql } from "drizzle-orm";
 import { requireAuth } from "../middlewares/auth.js";
+import {
+  buildCsv, sendCsvResponse,
+  TARGET_STATUS_LABELS, TARGET_TYPE_LABELS, ACTION_STATUS_LABELS, PRIORITY_LABELS,
+} from "../lib/csv-export.js";
 
 const router = Router();
 
@@ -42,6 +46,208 @@ async function calcProgress(unitId: number | null, baselineYear: number, targetY
   });
   return { baselineKwh, yearlyProgress };
 }
+
+// GET /api/targets/export
+router.get("/targets/export", requireAuth, async (req, res) => {
+  try {
+    const { role, companyId: sessionCompanyId, unitId: sessionUnitId } = req.user!;
+
+    // ── Yetki ve filtre koşulları ──────────────────────────────
+    // Non-admin kullanıcıların mutlaka bir birime atanmış olması gerekir
+    if (role !== "admin" && role !== "superadmin" && sessionUnitId === null) {
+      res.status(403).json({ error: "Export için birim yetkisi gerekli" });
+      return;
+    }
+
+    const conditions: SQL[] = [eq(energyTargetsTable.companyId, sessionCompanyId)];
+
+    if (role !== "admin" && role !== "superadmin") {
+      // Non-admin: sadece kendi birimi (null kontrolü yukarıda yapıldı)
+      conditions.push(eq(energyTargetsTable.unitId, sessionUnitId!));
+    } else if (role === "admin") {
+      const unitIdParam = req.query.unitId ? parseInt(req.query.unitId as string) : undefined;
+      if (unitIdParam !== undefined && !isNaN(unitIdParam)) {
+        conditions.push(eq(energyTargetsTable.unitId, unitIdParam));
+      }
+    }
+    // superadmin: şirket filtresi yeterli
+
+    const yearParam = req.query.year ? parseInt(req.query.year as string) : undefined;
+    const statusParam = req.query.status as string | undefined;
+    if (statusParam) conditions.push(eq(energyTargetsTable.status, statusParam));
+
+    // ── Hedefleri çek ─────────────────────────────────────────
+    const targets = await db
+      .select({
+        id: energyTargetsTable.id,
+        unitId: energyTargetsTable.unitId,
+        subUnitId: energyTargetsTable.subUnitId,
+        energySourceId: energyTargetsTable.energySourceId,
+        seuAssessmentId: energyTargetsTable.seuAssessmentId,
+        objectiveText: energyTargetsTable.objectiveText,
+        targetText: energyTargetsTable.targetText,
+        targetType: energyTargetsTable.targetType,
+        baselineYear: energyTargetsTable.baselineYear,
+        baselineValue: energyTargetsTable.baselineValue,
+        targetYear: energyTargetsTable.targetYear,
+        targetValue: energyTargetsTable.targetValue,
+        actualValue: energyTargetsTable.actualValue,
+        unitLabel: energyTargetsTable.unitLabel,
+        targetReductionPercent: energyTargetsTable.targetReductionPercent,
+        status: energyTargetsTable.status,
+        notes: energyTargetsTable.notes,
+        unitName: unitsTable.name,
+        subUnitName: subUnitsTable.name,
+        energySourceName: energySourcesTable.name,
+        seuYear: seuAssessmentsTable.year,
+      })
+      .from(energyTargetsTable)
+      .leftJoin(unitsTable, eq(energyTargetsTable.unitId, unitsTable.id))
+      .leftJoin(subUnitsTable, eq(energyTargetsTable.subUnitId, subUnitsTable.id))
+      .leftJoin(energySourcesTable, eq(energyTargetsTable.energySourceId, energySourcesTable.id))
+      .leftJoin(seuAssessmentsTable, eq(energyTargetsTable.seuAssessmentId, seuAssessmentsTable.id))
+      .where(and(...conditions))
+      .orderBy(energyTargetsTable.createdAt);
+
+    // ── Eylem planlarını çek ────────────────────────────────────
+    const targetIds = targets.map((t) => t.id);
+    const actions =
+      targetIds.length > 0
+        ? await db
+            .select()
+            .from(energyActionPlansTable)
+            .where(inArray(energyActionPlansTable.targetId, targetIds))
+            .orderBy(energyActionPlansTable.createdAt)
+        : [];
+
+    const actionsByTarget: Record<number, typeof actions> = {};
+    for (const a of actions) {
+      if (!actionsByTarget[a.targetId]) actionsByTarget[a.targetId] = [];
+      actionsByTarget[a.targetId].push(a);
+    }
+
+    // ── Satır oluşturma ────────────────────────────────────────
+    type ExportRow = Record<string, unknown>;
+    const rows: ExportRow[] = [];
+    for (const t of targets) {
+      if (yearParam !== undefined && t.baselineYear !== yearParam && t.targetYear !== yearParam) continue;
+
+      const seuLabel = t.seuYear != null ? `ÖEK ${t.seuYear}` : "";
+      const tActions = actionsByTarget[t.id] ?? [];
+
+      if (tActions.length === 0) {
+        rows.push({
+          yil: `${t.baselineYear}-${t.targetYear}`,
+          birim: t.unitName ?? "",
+          altBirim: t.subUnitName ?? "",
+          enerjiKaynagi: t.energySourceName ?? "",
+          ilgiliOek: seuLabel,
+          enerjiAmaci: t.objectiveText ?? "",
+          enerjiHedfi: t.targetText ?? "",
+          hedefTipi: TARGET_TYPE_LABELS[t.targetType ?? ""] ?? t.targetType ?? "",
+          bazYil: t.baselineYear,
+          bazDeger: t.baselineValue,
+          hedefYil: t.targetYear,
+          hedefDeger: t.targetValue,
+          gerceklesen: t.actualValue,
+          olcuBirimi: t.unitLabel ?? "",
+          hedefAzaltimOrani: t.targetReductionPercent,
+          hedefDurumu: TARGET_STATUS_LABELS[t.status ?? ""] ?? t.status ?? "",
+          eylemPlani: "",
+          sorumlu: "",
+          baslangicTarihi: "",
+          bitisTarihi: "",
+          oncelik: "",
+          beklenenTasarruf: "",
+          beklenenMaliTasarruf: "",
+          yatirimMaliyeti: "",
+          geriOdemeSuresi: "",
+          eylemDurumu: "",
+          ilerleme: "",
+          vapMi: "",
+          notlar: t.notes ?? "",
+        });
+      } else {
+        for (const a of tActions) {
+          rows.push({
+            yil: `${t.baselineYear}-${t.targetYear}`,
+            birim: t.unitName ?? "",
+            altBirim: t.subUnitName ?? "",
+            enerjiKaynagi: t.energySourceName ?? "",
+            ilgiliOek: seuLabel,
+            enerjiAmaci: t.objectiveText ?? "",
+            enerjiHedfi: t.targetText ?? "",
+            hedefTipi: TARGET_TYPE_LABELS[t.targetType ?? ""] ?? t.targetType ?? "",
+            bazYil: t.baselineYear,
+            bazDeger: t.baselineValue,
+            hedefYil: t.targetYear,
+            hedefDeger: t.targetValue,
+            gerceklesen: t.actualValue,
+            olcuBirimi: t.unitLabel ?? "",
+            hedefAzaltimOrani: t.targetReductionPercent,
+            hedefDurumu: TARGET_STATUS_LABELS[t.status ?? ""] ?? t.status ?? "",
+            eylemPlani: a.title ?? "",
+            sorumlu: a.responsibleName ?? "",
+            baslangicTarihi: a.startDate ?? "",
+            bitisTarihi: a.dueDate ?? "",
+            oncelik: PRIORITY_LABELS[a.priority ?? ""] ?? a.priority ?? "",
+            beklenenTasarruf: a.expectedSavingValue != null ? `${a.expectedSavingValue} ${a.expectedSavingUnit ?? ""}`.trim() : "",
+            beklenenMaliTasarruf: a.expectedCostSaving,
+            yatirimMaliyeti: a.investmentCost,
+            geriOdemeSuresi: a.paybackMonths,
+            eylemDurumu: ACTION_STATUS_LABELS[a.status ?? ""] ?? a.status ?? "",
+            ilerleme: a.progressPercent != null ? `%${a.progressPercent}` : "",
+            vapMi: a.isVap ? "Evet" : "Hayır",
+            notlar: a.notes ?? t.notes ?? "",
+          });
+        }
+      }
+    }
+
+    // ── CSV çıktısı ───────────────────────────────────────────
+    const HEADERS = [
+      { key: "yil", label: "Yıl" },
+      { key: "birim", label: "Birim" },
+      { key: "altBirim", label: "Alt Birim" },
+      { key: "enerjiKaynagi", label: "Enerji Kaynağı" },
+      { key: "ilgiliOek", label: "İlgili ÖEK" },
+      { key: "enerjiAmaci", label: "Enerji Amacı" },
+      { key: "enerjiHedfi", label: "Enerji Hedefi" },
+      { key: "hedefTipi", label: "Hedef Tipi" },
+      { key: "bazYil", label: "Baz Yıl" },
+      { key: "bazDeger", label: "Baz Değer" },
+      { key: "hedefYil", label: "Hedef Yıl" },
+      { key: "hedefDeger", label: "Hedef Değer" },
+      { key: "gerceklesen", label: "Gerçekleşen Değer" },
+      { key: "olcuBirimi", label: "Ölçü Birimi" },
+      { key: "hedefAzaltimOrani", label: "Hedef Azaltım Oranı (%)" },
+      { key: "hedefDurumu", label: "Hedef Durumu" },
+      { key: "eylemPlani", label: "Eylem Planı" },
+      { key: "sorumlu", label: "Sorumlu" },
+      { key: "baslangicTarihi", label: "Başlangıç Tarihi" },
+      { key: "bitisTarihi", label: "Bitiş Tarihi" },
+      { key: "oncelik", label: "Öncelik" },
+      { key: "beklenenTasarruf", label: "Beklenen Tasarruf" },
+      { key: "beklenenMaliTasarruf", label: "Beklenen Yıllık Mali Tasarruf" },
+      { key: "yatirimMaliyeti", label: "Yatırım Maliyeti" },
+      { key: "geriOdemeSuresi", label: "Geri Ödeme Süresi (ay)" },
+      { key: "eylemDurumu", label: "Eylem Durumu" },
+      { key: "ilerleme", label: "İlerleme" },
+      { key: "vapMi", label: "VAP mı?" },
+      { key: "notlar", label: "Notlar" },
+    ];
+
+    const filename = yearParam
+      ? `enerji-amac-hedef-eylem-plani-${yearParam}.csv`
+      : "enerji-amac-hedef-eylem-plani.csv";
+
+    const csv = buildCsv(HEADERS, rows);
+    sendCsvResponse(res, filename, csv);
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "CSV export hatası" });
+  }
+});
 
 // GET /api/targets
 router.get("/targets", requireAuth, async (req, res) => {

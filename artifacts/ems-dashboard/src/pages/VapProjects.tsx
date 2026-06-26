@@ -17,7 +17,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Pencil, Trash2, Zap, FolderOpen } from "lucide-react";
+import { Plus, Pencil, Trash2, Zap, FolderOpen, Download } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 const VAP_STATUSES = [
   { value: "idea", label: "Fikir", color: "bg-muted text-muted-foreground" },
@@ -82,8 +82,36 @@ export default function VapProjects() {
   const { toast } = useToast();
   const { unitId } = useUnit();
   const { companyId } = useCompany();
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const queryClient = useQueryClient();
+  const [csvLoading, setCsvLoading] = useState(false);
+
+  async function handleCsvExport() {
+    setCsvLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (unitId !== null) params.set("unitId", unitId.toString());
+      const url = `/api/vap-projects/export${params.size ? "?" + params.toString() : ""}`;
+      const res = await fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        toast({ title: data?.error ?? "Export başarısız", variant: "destructive" });
+        return;
+      }
+      const blob = await res.blob();
+      const disposition = res.headers.get("Content-Disposition") ?? "";
+      const match = disposition.match(/filename\*?=(?:UTF-8'')?([^;]+)/i);
+      const filename = match ? decodeURIComponent(match[1].trim()) : "vap-projeleri.csv";
+      const objUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = objUrl; a.download = filename; a.click();
+      URL.revokeObjectURL(objUrl);
+    } catch {
+      toast({ title: "Export sırasında hata oluştu", variant: "destructive" });
+    } finally {
+      setCsvLoading(false);
+    }
+  }
 
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -273,7 +301,13 @@ export default function VapProjects() {
           </h1>
           <p className="text-muted-foreground text-sm mt-1">ISO 50001 — VAP yönetimi ve fizibilite takibi</p>
         </div>
-        <Button onClick={() => openCreate()} className="gap-2"><Plus className="h-4 w-4" />Yeni VAP</Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={handleCsvExport} disabled={csvLoading} className="gap-2">
+            <Download className="h-4 w-4" />
+            {csvLoading ? "İndiriliyor..." : "CSV Export"}
+          </Button>
+          <Button onClick={() => openCreate()} className="gap-2"><Plus className="h-4 w-4" />Yeni VAP</Button>
+        </div>
       </div>
 
       {/* Summary */}

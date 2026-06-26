@@ -39,6 +39,8 @@ import type {
   EnergyTargetProgressRecord,
   EnergyTargetUpdate,
   EnergyTargetWithProgress,
+  ExportTargetsCsvParams,
+  ExportVapProjectsCsvParams,
   GetDashboardKpiParams,
   GetMonthlyTrendParams,
   GetPerformanceIndicatorsParams,
@@ -2660,6 +2662,174 @@ export const useDeleteEnergyTargetProgress = <TError = ErrorType<unknown>,
       > => {
       return useMutation(getDeleteEnergyTargetProgressMutationOptions(options));
     }
+
+export const getExportTargetsCsvUrl = (params?: ExportTargetsCsvParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/targets/export?${stringifiedParams}` : `/api/targets/export`
+}
+
+/**
+ * @summary Enerji hedefleri ve eylem planlarını CSV olarak export et
+ */
+export const exportTargetsCsv = async (params?: ExportTargetsCsvParams, options?: RequestInit): Promise<string> => {
+
+  return customFetch<string>(getExportTargetsCsvUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getExportTargetsCsvQueryKey = (params?: ExportTargetsCsvParams,) => {
+    return [
+    `/api/targets/export`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getExportTargetsCsvQueryOptions = <TData = Awaited<ReturnType<typeof exportTargetsCsv>>, TError = ErrorType<void>>(params?: ExportTargetsCsvParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof exportTargetsCsv>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getExportTargetsCsvQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof exportTargetsCsv>>> = ({ signal }) => exportTargetsCsv(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof exportTargetsCsv>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ExportTargetsCsvQueryResult = NonNullable<Awaited<ReturnType<typeof exportTargetsCsv>>>
+export type ExportTargetsCsvQueryError = ErrorType<void>
+
+
+/**
+ * @summary Enerji hedefleri ve eylem planlarını CSV olarak export et
+ */
+
+export function useExportTargetsCsv<TData = Awaited<ReturnType<typeof exportTargetsCsv>>, TError = ErrorType<void>>(
+ params?: ExportTargetsCsvParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof exportTargetsCsv>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getExportTargetsCsvQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getExportVapProjectsCsvUrl = (params?: ExportVapProjectsCsvParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/vap-projects/export?${stringifiedParams}` : `/api/vap-projects/export`
+}
+
+/**
+ * @summary VAP projelerini CSV olarak export et
+ */
+export const exportVapProjectsCsv = async (params?: ExportVapProjectsCsvParams, options?: RequestInit): Promise<string> => {
+
+  return customFetch<string>(getExportVapProjectsCsvUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getExportVapProjectsCsvQueryKey = (params?: ExportVapProjectsCsvParams,) => {
+    return [
+    `/api/vap-projects/export`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getExportVapProjectsCsvQueryOptions = <TData = Awaited<ReturnType<typeof exportVapProjectsCsv>>, TError = ErrorType<void>>(params?: ExportVapProjectsCsvParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof exportVapProjectsCsv>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getExportVapProjectsCsvQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof exportVapProjectsCsv>>> = ({ signal }) => exportVapProjectsCsv(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof exportVapProjectsCsv>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ExportVapProjectsCsvQueryResult = NonNullable<Awaited<ReturnType<typeof exportVapProjectsCsv>>>
+export type ExportVapProjectsCsvQueryError = ErrorType<void>
+
+
+/**
+ * @summary VAP projelerini CSV olarak export et
+ */
+
+export function useExportVapProjectsCsv<TData = Awaited<ReturnType<typeof exportVapProjectsCsv>>, TError = ErrorType<void>>(
+ params?: ExportVapProjectsCsvParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof exportVapProjectsCsv>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getExportVapProjectsCsvQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
 
 export const getListVapProjectsUrl = () => {
 

@@ -724,6 +724,85 @@ paths:
         "204":
           description: Deleted
 
+  # ── EXPORT ENDPOINTS ─────────────────────────────────────
+  /targets/export:
+    get:
+      operationId: exportTargetsCsv
+      tags: [targets]
+      summary: Enerji hedefleri ve eylem planlarını CSV olarak export et
+      parameters:
+        - name: year
+          in: query
+          required: false
+          schema:
+            type: integer
+        - name: unitId
+          in: query
+          required: false
+          schema:
+            type: integer
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: format
+          in: query
+          required: false
+          schema:
+            type: string
+            default: csv
+      responses:
+        "200":
+          description: CSV dosyası
+          content:
+            text/csv:
+              schema:
+                type: string
+        "401":
+          description: Yetkisiz erişim
+        "500":
+          description: Sunucu hatası
+
+  /vap-projects/export:
+    get:
+      operationId: exportVapProjectsCsv
+      tags: [vap-projects]
+      summary: VAP projelerini CSV olarak export et
+      parameters:
+        - name: year
+          in: query
+          required: false
+          schema:
+            type: integer
+        - name: unitId
+          in: query
+          required: false
+          schema:
+            type: integer
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: format
+          in: query
+          required: false
+          schema:
+            type: string
+            default: csv
+      responses:
+        "200":
+          description: CSV dosyası
+          content:
+            text/csv:
+              schema:
+                type: string
+        "401":
+          description: Yetkisiz erişim
+        "500":
+          description: Sunucu hatası
+
   # ── VAP PROJECTS ──────────────────────────────────────────
   /vap-projects:
     get:

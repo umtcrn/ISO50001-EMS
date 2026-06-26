@@ -732,6 +732,32 @@ export const DeleteEnergyTargetProgressParams = zod.object({
 
 
 /**
+ * @summary Enerji hedefleri ve eylem planlarını CSV olarak export et
+ */
+export const exportTargetsCsvQueryFormatDefault = `csv`;
+
+export const ExportTargetsCsvQueryParams = zod.object({
+  "year": zod.coerce.number().optional(),
+  "unitId": zod.coerce.number().optional(),
+  "status": zod.coerce.string().optional(),
+  "format": zod.coerce.string().default(exportTargetsCsvQueryFormatDefault)
+})
+
+
+/**
+ * @summary VAP projelerini CSV olarak export et
+ */
+export const exportVapProjectsCsvQueryFormatDefault = `csv`;
+
+export const ExportVapProjectsCsvQueryParams = zod.object({
+  "year": zod.coerce.number().optional(),
+  "unitId": zod.coerce.number().optional(),
+  "status": zod.coerce.string().optional(),
+  "format": zod.coerce.string().default(exportVapProjectsCsvQueryFormatDefault)
+})
+
+
+/**
  * @summary VAP projelerini listele
  */
 export const ListVapProjectsResponseItem = zod.object({

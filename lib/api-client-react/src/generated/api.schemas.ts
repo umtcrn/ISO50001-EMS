@@ -862,6 +862,20 @@ export type ListEnergyTargetProgressParams = {
 targetId?: number;
 };
 
+export type ExportTargetsCsvParams = {
+year?: number;
+unitId?: number;
+status?: string;
+format?: string;
+};
+
+export type ExportVapProjectsCsvParams = {
+year?: number;
+unitId?: number;
+status?: string;
+format?: string;
+};
+
 export type ListRisksParams = {
 unitId?: number;
 companyId?: number;
