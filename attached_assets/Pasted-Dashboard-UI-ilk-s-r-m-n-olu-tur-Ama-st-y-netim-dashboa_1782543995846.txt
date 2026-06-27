@@ -1,0 +1,83 @@
+Dashboard UI ilk sürümünü oluştur.
+
+Amaç:
+Üst yönetim dashboard ekranında yeni eklenen 4 dashboard endpoint'inden gelen verileri göstermek.
+
+Kullanılacak yeni hook'lar:
+- useGetDashboardTargetStatus
+- useGetDashboardActionStatus
+- useGetDashboardVapSummary
+- useGetDashboardSeuSummary
+
+Kapsam:
+1. Mevcut dashboard sayfasını analiz et.
+2. Yeni dashboard bölümlerini mevcut tasarıma uygun ekle.
+3. shadcn/ui ve mevcut kart/tablo/chart pattern'lerini kullan.
+4. Frontend dışındaki dosyalara gerekmedikçe dokunma.
+5. Backend route, migration veya DB şemasına dokunma.
+
+Ekranda olacak bölümler:
+
+A) Üst KPI kartları
+- Aktif hedef sayısı
+- Ortalama hedef gerçekleşme yüzdesi
+- Açık eylem planı sayısı
+- Gecikmiş eylem planı sayısı
+- Aktif VAP sayısı
+- Toplam yıllık beklenen tasarruf
+- ÖEK sayısı veya ÖEK kapsamı
+
+B) Hedef Durumu
+- target-status verisinden hedef listesi göster.
+- Hedef adı, birim, hedef yılı, gerçekleşme yüzdesi, durum ve progress bar göster.
+- achievementPct 100'ün üzerindeyse progress bar görsel olarak 100'e clamp edilsin ama metinde gerçek değer gösterilebilir.
+- Veri yoksa boş durum mesajı göster.
+
+C) Eylem Planı Durumu
+- action-status summary değerlerini kart veya küçük dağılım olarak göster.
+- Gecikmiş ve devam eden eylemler listelensin.
+- Veri yoksa boş durum mesajı göster.
+
+D) VAP Portföyü
+- vap-summary financial alanlarını göster:
+  totalInvestment
+  totalAnnualCostSaving
+  portfolioPaybackMonths
+  totalCo2ReductionTon
+- VAP items listesini kısa tablo olarak göster.
+- Veri yoksa boş durum mesajı göster.
+
+E) ÖEK Özeti
+- seu-summary byUnit ve topSeuItems verilerini göster.
+- Eğer totalAssessments = 0 ise:
+  “Henüz resmi ÖEK değerlendirmesi bulunmuyor.”
+  mesajını göster.
+- Legacy seu_items kullanma.
+
+Filtreler:
+- İlk sürümde sadece year filtresi olsun.
+- Varsayılan yıl 2025 olabilir veya mevcut dashboard yıl seçimi varsa onu kullan.
+- unitId filtresini şimdilik ekleme; admin/user scope backend'de zaten uygulanıyor.
+
+Teknik beklenti:
+- Loading state olsun.
+- Error state olsun.
+- Empty state olsun.
+- Sayı formatları Türkçe görünsün.
+- Para değerleri ₺ formatında gösterilsin.
+- Büyük layout değişikliği yapma; mevcut dashboard yapısına uyumlu ilerle.
+
+Test:
+1. pnpm run typecheck
+2. pnpm run build
+3. Dashboard sayfası tarayıcıda açılıyor mu kontrol et.
+4. API hatası olursa ekran tamamen patlamasın.
+5. SEU verisi boşken düzgün mesaj görünsün.
+
+İş sonunda raporla:
+- Değişen dosyalar
+- Eklenen dashboard bölümleri
+- Kullanılan hook'lar
+- Typecheck sonucu
+- Build sonucu
+- Varsa görsel/UX notları
