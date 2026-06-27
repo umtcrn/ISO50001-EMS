@@ -29,7 +29,11 @@ import type {
   ConsumptionInput,
   ConsumptionRecord,
   ConsumptionUpdate,
+  DashboardActionStatusResponse,
   DashboardKpi,
+  DashboardSeuSummaryResponse,
+  DashboardTargetStatusResponse,
+  DashboardVapSummaryResponse,
   EnergyActionPlan,
   EnergyActionPlanInput,
   EnergyActionPlanUpdate,
@@ -41,7 +45,11 @@ import type {
   EnergyTargetWithProgress,
   ExportTargetsCsvParams,
   ExportVapProjectsCsvParams,
+  GetDashboardActionStatusParams,
   GetDashboardKpiParams,
+  GetDashboardSeuSummaryParams,
+  GetDashboardTargetStatusParams,
+  GetDashboardVapSummaryParams,
   GetMonthlyTrendParams,
   GetPerformanceIndicatorsParams,
   GetRegressionAnalysisParams,
@@ -4173,6 +4181,342 @@ export function useGetSeuBreakdown<TData = Awaited<ReturnType<typeof getSeuBreak
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetSeuBreakdownQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetDashboardTargetStatusUrl = (params?: GetDashboardTargetStatusParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/dashboard/target-status?${stringifiedParams}` : `/api/dashboard/target-status`
+}
+
+/**
+ * @summary Hedef durumu ve gerçekleşme özeti
+ */
+export const getDashboardTargetStatus = async (params?: GetDashboardTargetStatusParams, options?: RequestInit): Promise<DashboardTargetStatusResponse> => {
+
+  return customFetch<DashboardTargetStatusResponse>(getGetDashboardTargetStatusUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetDashboardTargetStatusQueryKey = (params?: GetDashboardTargetStatusParams,) => {
+    return [
+    `/api/dashboard/target-status`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetDashboardTargetStatusQueryOptions = <TData = Awaited<ReturnType<typeof getDashboardTargetStatus>>, TError = ErrorType<unknown>>(params?: GetDashboardTargetStatusParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDashboardTargetStatus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetDashboardTargetStatusQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getDashboardTargetStatus>>> = ({ signal }) => getDashboardTargetStatus(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getDashboardTargetStatus>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetDashboardTargetStatusQueryResult = NonNullable<Awaited<ReturnType<typeof getDashboardTargetStatus>>>
+export type GetDashboardTargetStatusQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Hedef durumu ve gerçekleşme özeti
+ */
+
+export function useGetDashboardTargetStatus<TData = Awaited<ReturnType<typeof getDashboardTargetStatus>>, TError = ErrorType<unknown>>(
+ params?: GetDashboardTargetStatusParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDashboardTargetStatus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetDashboardTargetStatusQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetDashboardActionStatusUrl = (params?: GetDashboardActionStatusParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/dashboard/action-status?${stringifiedParams}` : `/api/dashboard/action-status`
+}
+
+/**
+ * @summary Eylem planı durum özeti
+ */
+export const getDashboardActionStatus = async (params?: GetDashboardActionStatusParams, options?: RequestInit): Promise<DashboardActionStatusResponse> => {
+
+  return customFetch<DashboardActionStatusResponse>(getGetDashboardActionStatusUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetDashboardActionStatusQueryKey = (params?: GetDashboardActionStatusParams,) => {
+    return [
+    `/api/dashboard/action-status`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetDashboardActionStatusQueryOptions = <TData = Awaited<ReturnType<typeof getDashboardActionStatus>>, TError = ErrorType<unknown>>(params?: GetDashboardActionStatusParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDashboardActionStatus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetDashboardActionStatusQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getDashboardActionStatus>>> = ({ signal }) => getDashboardActionStatus(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getDashboardActionStatus>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetDashboardActionStatusQueryResult = NonNullable<Awaited<ReturnType<typeof getDashboardActionStatus>>>
+export type GetDashboardActionStatusQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Eylem planı durum özeti
+ */
+
+export function useGetDashboardActionStatus<TData = Awaited<ReturnType<typeof getDashboardActionStatus>>, TError = ErrorType<unknown>>(
+ params?: GetDashboardActionStatusParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDashboardActionStatus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetDashboardActionStatusQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetDashboardVapSummaryUrl = (params?: GetDashboardVapSummaryParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/dashboard/vap-summary?${stringifiedParams}` : `/api/dashboard/vap-summary`
+}
+
+/**
+ * @summary VAP proje portföy özeti
+ */
+export const getDashboardVapSummary = async (params?: GetDashboardVapSummaryParams, options?: RequestInit): Promise<DashboardVapSummaryResponse> => {
+
+  return customFetch<DashboardVapSummaryResponse>(getGetDashboardVapSummaryUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetDashboardVapSummaryQueryKey = (params?: GetDashboardVapSummaryParams,) => {
+    return [
+    `/api/dashboard/vap-summary`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetDashboardVapSummaryQueryOptions = <TData = Awaited<ReturnType<typeof getDashboardVapSummary>>, TError = ErrorType<unknown>>(params?: GetDashboardVapSummaryParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDashboardVapSummary>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetDashboardVapSummaryQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getDashboardVapSummary>>> = ({ signal }) => getDashboardVapSummary(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getDashboardVapSummary>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetDashboardVapSummaryQueryResult = NonNullable<Awaited<ReturnType<typeof getDashboardVapSummary>>>
+export type GetDashboardVapSummaryQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary VAP proje portföy özeti
+ */
+
+export function useGetDashboardVapSummary<TData = Awaited<ReturnType<typeof getDashboardVapSummary>>, TError = ErrorType<unknown>>(
+ params?: GetDashboardVapSummaryParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDashboardVapSummary>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetDashboardVapSummaryQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetDashboardSeuSummaryUrl = (params?: GetDashboardSeuSummaryParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/dashboard/seu-summary?${stringifiedParams}` : `/api/dashboard/seu-summary`
+}
+
+/**
+ * @summary SEU değerlendirme özeti (ÖEK)
+ */
+export const getDashboardSeuSummary = async (params?: GetDashboardSeuSummaryParams, options?: RequestInit): Promise<DashboardSeuSummaryResponse> => {
+
+  return customFetch<DashboardSeuSummaryResponse>(getGetDashboardSeuSummaryUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetDashboardSeuSummaryQueryKey = (params?: GetDashboardSeuSummaryParams,) => {
+    return [
+    `/api/dashboard/seu-summary`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetDashboardSeuSummaryQueryOptions = <TData = Awaited<ReturnType<typeof getDashboardSeuSummary>>, TError = ErrorType<unknown>>(params?: GetDashboardSeuSummaryParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDashboardSeuSummary>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetDashboardSeuSummaryQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getDashboardSeuSummary>>> = ({ signal }) => getDashboardSeuSummary(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getDashboardSeuSummary>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetDashboardSeuSummaryQueryResult = NonNullable<Awaited<ReturnType<typeof getDashboardSeuSummary>>>
+export type GetDashboardSeuSummaryQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary SEU değerlendirme özeti (ÖEK)
+ */
+
+export function useGetDashboardSeuSummary<TData = Awaited<ReturnType<typeof getDashboardSeuSummary>>, TError = ErrorType<unknown>>(
+ params?: GetDashboardSeuSummaryParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDashboardSeuSummary>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetDashboardSeuSummaryQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

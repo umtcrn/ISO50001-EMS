@@ -812,6 +812,150 @@ export interface VapProjectUpdate {
   notes?: string;
 }
 
+export interface TargetProgressSnapshot {
+  periodYear?: number;
+  periodMonth?: number | null;
+  actualValue?: number | null;
+  actualSavingValue?: number | null;
+}
+
+export interface DashboardTargetItem {
+  id: number;
+  name: string;
+  objectiveText?: string | null;
+  targetText?: string | null;
+  unitName?: string | null;
+  subUnitName?: string | null;
+  energySourceName?: string | null;
+  targetType?: string | null;
+  baselineYear?: number | null;
+  baselineValue?: number | null;
+  targetYear?: number | null;
+  targetValue?: number | null;
+  actualValue?: number | null;
+  unitLabel?: string | null;
+  targetReductionPercent?: number | null;
+  achievementPct?: number | null;
+  status: string;
+  actionCount: number;
+  latestProgress?: TargetProgressSnapshot | null;
+  trend?: TargetProgressSnapshot[];
+}
+
+export interface DashboardTargetStatusResponse {
+  items: DashboardTargetItem[];
+}
+
+export interface ActionStatusSummary {
+  total?: number;
+  planned?: number;
+  inProgress?: number;
+  completed?: number;
+  cancelled?: number;
+  overdue?: number;
+  avgProgressPct?: number;
+}
+
+export interface ActionStatusFinancial {
+  totalExpectedCostSaving?: number;
+  totalInvestment?: number;
+  avgPaybackMonths?: number | null;
+}
+
+export interface DashboardActionItem {
+  id: number;
+  title: string;
+  targetName?: string | null;
+  unitName?: string | null;
+  status: string;
+  priority?: string | null;
+  progressPct?: number | null;
+  dueDate?: string | null;
+  isVap?: boolean | null;
+  isOverdue: boolean;
+  expectedCostSaving?: number | null;
+  investmentCost?: number | null;
+  paybackMonths?: number | null;
+}
+
+export interface DashboardActionStatusResponse {
+  summary: ActionStatusSummary;
+  financial: ActionStatusFinancial;
+  items: DashboardActionItem[];
+}
+
+export type VapPortfolioSummaryByStatus = {[key: string]: number};
+
+export type VapPortfolioSummaryByFeasibility = {[key: string]: number};
+
+export interface VapPortfolioSummary {
+  total?: number;
+  byStatus?: VapPortfolioSummaryByStatus;
+  byFeasibility?: VapPortfolioSummaryByFeasibility;
+}
+
+export interface VapPortfolioFinancial {
+  totalInvestment?: number;
+  totalAnnualCostSaving?: number;
+  totalCo2ReductionTon?: number;
+  portfolioPaybackMonths?: number | null;
+}
+
+export interface DashboardVapItem {
+  id: number;
+  projectCode?: string | null;
+  projectTitle: string;
+  projectType?: string | null;
+  unitName?: string | null;
+  energySourceName?: string | null;
+  targetName?: string | null;
+  status: string;
+  feasibilityStatus?: string | null;
+  incentiveStatus?: string | null;
+  annualEnergySavingValue?: number | null;
+  annualEnergySavingUnit?: string | null;
+  annualCostSaving?: number | null;
+  investmentCost?: number | null;
+  paybackMonths?: number | null;
+  co2ReductionTon?: number | null;
+  startDate?: string | null;
+  endDate?: string | null;
+}
+
+export interface DashboardVapSummaryResponse {
+  summary: VapPortfolioSummary;
+  financial: VapPortfolioFinancial;
+  items: DashboardVapItem[];
+}
+
+export interface SeuUnitSummary {
+  unitId?: number | null;
+  unitName?: string | null;
+  latestAssessmentYear?: number;
+  unitTotalTep?: number | null;
+  confirmedSeuCount?: number;
+  confirmedSeuTep?: number;
+  coveragePct?: number;
+  overrideCount?: number;
+}
+
+export interface SeuTopItem {
+  name?: string;
+  energyUseGroupName?: string | null;
+  unitName?: string | null;
+  energyTep?: number;
+  consumptionSharePct?: number | null;
+  userDecision?: string | null;
+  responsible?: string | null;
+  targetReductionPercent?: number | null;
+}
+
+export interface DashboardSeuSummaryResponse {
+  totalAssessments: number;
+  byUnit: SeuUnitSummary[];
+  topSeuItems: SeuTopItem[];
+}
+
 export type ListUnitsParams = {
 companyId?: number;
 };
@@ -910,6 +1054,33 @@ export type GetSeuBreakdownParams = {
 year?: number;
 unitId?: number;
 companyId?: number;
+};
+
+export type GetDashboardTargetStatusParams = {
+year?: number;
+unitId?: number;
+energySourceId?: number;
+status?: string;
+};
+
+export type GetDashboardActionStatusParams = {
+year?: number;
+unitId?: number;
+status?: string;
+priority?: string;
+isVap?: boolean;
+};
+
+export type GetDashboardVapSummaryParams = {
+year?: number;
+unitId?: number;
+status?: string;
+feasibilityStatus?: string;
+};
+
+export type GetDashboardSeuSummaryParams = {
+year?: number;
+unitId?: number;
 };
 
 export type GetSummaryParams = {

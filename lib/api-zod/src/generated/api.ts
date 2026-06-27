@@ -1202,6 +1202,174 @@ export const GetSeuBreakdownResponse = zod.array(GetSeuBreakdownResponseItem)
 
 
 /**
+ * @summary Hedef durumu ve gerçekleşme özeti
+ */
+export const GetDashboardTargetStatusQueryParams = zod.object({
+  "year": zod.coerce.number().optional(),
+  "unitId": zod.coerce.number().optional(),
+  "energySourceId": zod.coerce.number().optional(),
+  "status": zod.coerce.string().optional()
+})
+
+export const GetDashboardTargetStatusResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "objectiveText": zod.string().nullish(),
+  "targetText": zod.string().nullish(),
+  "unitName": zod.string().nullish(),
+  "subUnitName": zod.string().nullish(),
+  "energySourceName": zod.string().nullish(),
+  "targetType": zod.string().nullish(),
+  "baselineYear": zod.number().nullish(),
+  "baselineValue": zod.number().nullish(),
+  "targetYear": zod.number().nullish(),
+  "targetValue": zod.number().nullish(),
+  "actualValue": zod.number().nullish(),
+  "unitLabel": zod.string().nullish(),
+  "targetReductionPercent": zod.number().nullish(),
+  "achievementPct": zod.number().nullish(),
+  "status": zod.string(),
+  "actionCount": zod.number(),
+  "latestProgress": zod.object({
+  "periodYear": zod.number().optional(),
+  "periodMonth": zod.number().nullish(),
+  "actualValue": zod.number().nullish(),
+  "actualSavingValue": zod.number().nullish()
+}).nullish(),
+  "trend": zod.array(zod.object({
+  "periodYear": zod.number().optional(),
+  "periodMonth": zod.number().nullish(),
+  "actualValue": zod.number().nullish(),
+  "actualSavingValue": zod.number().nullish()
+})).optional()
+}))
+})
+
+
+/**
+ * @summary Eylem planı durum özeti
+ */
+export const GetDashboardActionStatusQueryParams = zod.object({
+  "year": zod.coerce.number().optional(),
+  "unitId": zod.coerce.number().optional(),
+  "status": zod.coerce.string().optional(),
+  "priority": zod.coerce.string().optional(),
+  "isVap": zod.coerce.boolean().optional()
+})
+
+export const GetDashboardActionStatusResponse = zod.object({
+  "summary": zod.object({
+  "total": zod.number().optional(),
+  "planned": zod.number().optional(),
+  "inProgress": zod.number().optional(),
+  "completed": zod.number().optional(),
+  "cancelled": zod.number().optional(),
+  "overdue": zod.number().optional(),
+  "avgProgressPct": zod.number().optional()
+}),
+  "financial": zod.object({
+  "totalExpectedCostSaving": zod.number().optional(),
+  "totalInvestment": zod.number().optional(),
+  "avgPaybackMonths": zod.number().nullish()
+}),
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "title": zod.string(),
+  "targetName": zod.string().nullish(),
+  "unitName": zod.string().nullish(),
+  "status": zod.string(),
+  "priority": zod.string().nullish(),
+  "progressPct": zod.number().nullish(),
+  "dueDate": zod.string().nullish(),
+  "isVap": zod.boolean().nullish(),
+  "isOverdue": zod.boolean(),
+  "expectedCostSaving": zod.number().nullish(),
+  "investmentCost": zod.number().nullish(),
+  "paybackMonths": zod.number().nullish()
+}))
+})
+
+
+/**
+ * @summary VAP proje portföy özeti
+ */
+export const GetDashboardVapSummaryQueryParams = zod.object({
+  "year": zod.coerce.number().optional(),
+  "unitId": zod.coerce.number().optional(),
+  "status": zod.coerce.string().optional(),
+  "feasibilityStatus": zod.coerce.string().optional()
+})
+
+export const GetDashboardVapSummaryResponse = zod.object({
+  "summary": zod.object({
+  "total": zod.number().optional(),
+  "byStatus": zod.record(zod.string(), zod.number()).optional(),
+  "byFeasibility": zod.record(zod.string(), zod.number()).optional()
+}),
+  "financial": zod.object({
+  "totalInvestment": zod.number().optional(),
+  "totalAnnualCostSaving": zod.number().optional(),
+  "totalCo2ReductionTon": zod.number().optional(),
+  "portfolioPaybackMonths": zod.number().nullish()
+}),
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "projectCode": zod.string().nullish(),
+  "projectTitle": zod.string(),
+  "projectType": zod.string().nullish(),
+  "unitName": zod.string().nullish(),
+  "energySourceName": zod.string().nullish(),
+  "targetName": zod.string().nullish(),
+  "status": zod.string(),
+  "feasibilityStatus": zod.string().nullish(),
+  "incentiveStatus": zod.string().nullish(),
+  "annualEnergySavingValue": zod.number().nullish(),
+  "annualEnergySavingUnit": zod.string().nullish(),
+  "annualCostSaving": zod.number().nullish(),
+  "investmentCost": zod.number().nullish(),
+  "paybackMonths": zod.number().nullish(),
+  "co2ReductionTon": zod.number().nullish(),
+  "startDate": zod.string().nullish(),
+  "endDate": zod.string().nullish()
+}))
+})
+
+
+/**
+ * @summary SEU değerlendirme özeti (ÖEK)
+ */
+export const GetDashboardSeuSummaryQueryParams = zod.object({
+  "year": zod.coerce.number().optional(),
+  "unitId": zod.coerce.number().optional()
+})
+
+export const GetDashboardSeuSummaryResponse = zod.object({
+  "totalAssessments": zod.number(),
+  "byUnit": zod.array(zod.object({
+  "unitId": zod.number().nullish(),
+  "unitName": zod.string().nullish(),
+  "latestAssessmentYear": zod.number().optional(),
+  "unitTotalTep": zod.number().nullish(),
+  "confirmedSeuCount": zod.number().optional(),
+  "confirmedSeuTep": zod.number().optional(),
+  "coveragePct": zod.number().optional(),
+  "overrideCount": zod.number().optional()
+})),
+  "topSeuItems": zod.array(zod.object({
+  "name": zod.string().optional(),
+  "energyUseGroupName": zod.string().nullish(),
+  "unitName": zod.string().nullish(),
+  "energyTep": zod.number().optional(),
+  "consumptionSharePct": zod.number().nullish(),
+  "userDecision": zod.string().nullish(),
+  "responsible": zod.string().nullish(),
+  "targetReductionPercent": zod.number().nullish()
+}))
+})
+
+
+/**
  * @summary Tüm birimler için özet ve karşılaştırma
  */
 export const GetSummaryQueryParams = zod.object({
