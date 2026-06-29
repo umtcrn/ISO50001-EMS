@@ -1,9 +1,10 @@
 import { Router } from "express";
-import { db, mgmStationsTable, mgmDegreeDataTable, mgmSyncLogTable } from "@workspace/db";
+import { db, mgmStationsTable, mgmDegreeDataTable, mgmSyncLogTable, weatherDegreeDaysTable } from "@workspace/db";
 import { desc, eq, and } from "drizzle-orm";
 import { requireAuth, requireAdmin } from "../middlewares/auth.js";
-import { syncCurrentMonthData, lookupDegreeData, lookupOfficialWeatherDegreeDay } from "../services/mgm-sync.js";
+import { syncCurrentMonthData, lookupDegreeData, lookupOfficialWeatherDegreeDay, lookupOfficialByStationKey, toStationKey } from "../services/mgm-sync.js";
 import { MGM_STATIONS, findStationByCity, findStationByIlIlce, parseIlIlce, findNearestStation, haversineDistance } from "../services/mgm-stations-data.js";
+import { syncOfficialDegreeDays } from "../services/mgm-official-sync.js";
 
 const router = Router();
 
@@ -43,13 +44,11 @@ router.get("/mgm/lookup", requireAuth, async (req, res) => {
     const nearestKm: number | null = null;
 
     if (stationCode) {
-      // Direkt istasyon kodu ile sorgu
       targetCode = stationCode as string;
       const st = MGM_STATIONS.find(s => s.stationCode === targetCode);
       stationName = st ? st.name : targetCode;
     } else if (city) {
       const requestedCity = city as string;
-      // "İl / İlçe" formatını parse et; önce birebir il+ilçe, yoksa il bazında fallback
       const { il, ilce } = parseIlIlce(requestedCity);
       const lookup = findStationByIlIlce(il, ilce);
       if (lookup) {
@@ -59,7 +58,6 @@ router.get("/mgm/lookup", requireAuth, async (req, res) => {
           note = `"${requestedCity}" için birebir MGM istasyonu bulunamadı. ${il} iline ait "${lookup.station.name}" istasyonu kullanıldı.`;
         }
       } else {
-        // İl de bulunamadı → coğrafi merkez fallback
         const nearest = findNearestStation(39.0, 35.0);
         targetCode = nearest.stationCode;
         stationName = nearest.name;
@@ -71,29 +69,64 @@ router.get("/mgm/lookup", requireAuth, async (req, res) => {
       return;
     }
 
-    // 1. Önce resmi MGM aylık veriyi kontrol et
-    const { il } = parseIlIlce(city ? city as string : "");
-    const officialData = city
-      ? await lookupOfficialWeatherDegreeDay(il, yr, mo)
-      : null;
+    // 1. Resmi MGM aylık veriyi kontrol et (station_key öncelikli)
+    if (city) {
+      const { il, ilce } = parseIlIlce(city as string);
 
-    if (officialData) {
-      res.json({
-        stationCode: targetCode,
-        stationName: officialData.stationName ?? stationName,
-        year: yr,
-        month: mo,
-        hdd: officialData.hdd,
-        cdd: officialData.cdd,
-        usedNearest,
-        nearestKm,
-        note: officialData.stationNote ?? note,
-        dataMethod: "official_monthly",
-      });
-      return;
+      // İlçe varsa station_key ile ara
+      if (ilce) {
+        const sk = toStationKey(il, ilce);
+        const officialByKey = await lookupOfficialByStationKey(sk, yr, mo);
+        if (officialByKey) {
+          res.json({
+            stationCode: targetCode,
+            stationName: officialByKey.stationName ?? stationName,
+            year: yr, month: mo,
+            hdd: officialByKey.hdd, cdd: officialByKey.cdd,
+            usedNearest, nearestKm,
+            note: officialByKey.stationNote ?? note,
+            dataMethod: "official_monthly",
+          });
+          return;
+        }
+      }
+
+      // İl merkezi
+      const ilKey = toStationKey(il, null);
+      const officialByIl = await lookupOfficialByStationKey(ilKey, yr, mo);
+      if (officialByIl) {
+        const fallbackNote = ilce
+          ? `"${ilce}" için özel MGM istasyonu resmi verisi bulunamadı. ${il} ili merkezi resmi verisi kullanıldı.`
+          : null;
+        res.json({
+          stationCode: targetCode,
+          stationName: officialByIl.stationName ?? stationName,
+          year: yr, month: mo,
+          hdd: officialByIl.hdd, cdd: officialByIl.cdd,
+          usedNearest, nearestKm,
+          note: officialByIl.stationNote ?? fallbackNote ?? note,
+          dataMethod: "official_monthly",
+        });
+        return;
+      }
+
+      // Province text fallback
+      const officialByProv = await lookupOfficialWeatherDegreeDay(il, yr, mo);
+      if (officialByProv) {
+        res.json({
+          stationCode: targetCode,
+          stationName: officialByProv.stationName ?? stationName,
+          year: yr, month: mo,
+          hdd: officialByProv.hdd, cdd: officialByProv.cdd,
+          usedNearest, nearestKm,
+          note: officialByProv.stationNote ?? note,
+          dataMethod: "official_monthly",
+        });
+        return;
+      }
     }
 
-    // 2. Resmi veri yoksa Open-Meteo havuzundan
+    // 2. Resmi veri yoksa → Open-Meteo havuzundan (hesaplanmış)
     const data = await lookupDegreeData(targetCode!, yr, mo);
     if (!data) {
       res.status(404).json({ error: "Bu dönem için MGM verisi bulunamadı" });
@@ -103,12 +136,9 @@ router.get("/mgm/lookup", requireAuth, async (req, res) => {
     res.json({
       stationCode: targetCode,
       stationName,
-      year: yr,
-      month: mo,
-      hdd: data.hdd,
-      cdd: data.cdd,
-      usedNearest,
-      nearestKm,
+      year: yr, month: mo,
+      hdd: data.hdd, cdd: data.cdd,
+      usedNearest, nearestKm,
       note,
       dataMethod: "calculated_daily",
     });
@@ -137,9 +167,7 @@ router.get("/mgm/lookup-by-location", requireAuth, async (req, res) => {
 
     if (city) {
       const found = findStationByCity(city as string);
-      if (found) {
-        targetStation = found;
-      }
+      if (found) targetStation = found;
     }
 
     if (!targetStation && lat && lon) {
@@ -170,13 +198,9 @@ router.get("/mgm/lookup-by-location", requireAuth, async (req, res) => {
       il: targetStation.il,
       lat: targetStation.lat,
       lon: targetStation.lon,
-      year: yr,
-      month: mo,
-      hdd: data.hdd,
-      cdd: data.cdd,
-      usedNearest,
-      nearestKm,
-      note,
+      year: yr, month: mo,
+      hdd: data.hdd, cdd: data.cdd,
+      usedNearest, nearestKm, note,
     });
   } catch (err) {
     req.log.error(err);
@@ -197,18 +221,60 @@ router.get("/mgm/sync-log", requireAuth, async (req, res) => {
   }
 });
 
-// POST /api/mgm/sync — Manuel sync tetikle (admin only)
+// POST /api/mgm/sync — Manuel Open-Meteo sync tetikle (admin only)
 router.post("/mgm/sync", requireAuth, requireAdmin, async (req, res) => {
   try {
     const result = await syncCurrentMonthData();
     res.json({
-      message: "Sync tamamlandı",
+      message: "Open-Meteo sync tamamlandı",
       synced: result.synced,
       errors: result.errors,
     });
   } catch (err) {
     req.log.error(err);
     res.status(500).json({ error: "Sync hatası" });
+  }
+});
+
+// POST /api/admin/weather-degree-days/sync — MGM Resmi Gün Derece Havuzu senkronizasyonu
+// Admin/superadmin erişebilir. Body: { year?: number } veya { years?: number[] }
+router.post("/admin/weather-degree-days/sync", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const now = new Date();
+    const currentYear = now.getFullYear();
+
+    let years: number[];
+    if (req.body?.years && Array.isArray(req.body.years)) {
+      years = req.body.years.map(Number).filter((y: number) => !isNaN(y));
+    } else if (req.body?.year) {
+      years = [parseInt(req.body.year)];
+    } else {
+      // Default: mevcut yıl ve önceki yıl
+      years = [currentYear - 1, currentYear];
+    }
+
+    const logs: string[] = [];
+    const onProgress = (msg: string) => {
+      logs.push(msg);
+      req.log.info(msg);
+    };
+
+    const results = await syncOfficialDegreeDays(years, onProgress);
+
+    const summary = results.map(r =>
+      `${r.year}: +${r.inserted} eklendi, ~${r.updated} güncellendi, ${r.stationCount} istasyon, ${r.errors} hata`
+    );
+
+    res.json({
+      message: "MGM resmi gün derece senkronizasyonu tamamlandı",
+      years,
+      results,
+      summary,
+      logs,
+    });
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "MGM resmi sync hatası" });
   }
 });
 
@@ -221,15 +287,30 @@ router.get("/mgm/degree-data", requireAuth, async (req, res) => {
       return;
     }
 
-    let query = db.select().from(mgmDegreeDataTable)
-      .where(eq(mgmDegreeDataTable.stationCode, stationCode as string))
-      .$dynamic();
-
     const rows = await db.select().from(mgmDegreeDataTable)
       .where(eq(mgmDegreeDataTable.stationCode, stationCode as string))
       .orderBy(mgmDegreeDataTable.year, mgmDegreeDataTable.month);
 
     const filtered = year ? rows.filter(r => r.year === parseInt(year as string)) : rows;
+    res.json(filtered);
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Sunucu hatası" });
+  }
+});
+
+// GET /api/admin/weather-degree-days — Resmi MGM veri listesi (admin)
+router.get("/admin/weather-degree-days", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { year, province } = req.query;
+    const rows = await db.select().from(weatherDegreeDaysTable)
+      .where(eq(weatherDegreeDaysTable.isOfficial, true))
+      .orderBy(weatherDegreeDaysTable.province, weatherDegreeDaysTable.year as any, weatherDegreeDaysTable.month as any);
+
+    let filtered = rows;
+    if (year) filtered = filtered.filter(r => r.year === parseInt(year as string));
+    if (province) filtered = filtered.filter(r => r.province?.toLowerCase().includes((province as string).toLowerCase()));
+
     res.json(filtered);
   } catch (err) {
     req.log.error(err);

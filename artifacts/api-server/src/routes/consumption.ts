@@ -2,66 +2,71 @@ import { Router } from "express";
 import { db, consumptionTable, metersTable, subUnitsTable, energyUseGroupsTable } from "@workspace/db";
 import { eq, and, ne, sql } from "drizzle-orm";
 import { requireAuth } from "../middlewares/auth.js";
-import { findStationByIlIlce, parseIlIlce, findNearestStation } from "../services/mgm-stations-data.js";
-import { lookupDegreeData, lookupOfficialWeatherDegreeDay } from "../services/mgm-sync.js";
+import { findStationByIlIlce, parseIlIlce } from "../services/mgm-stations-data.js";
+import { toStationKey, lookupOfficialByStationKey, lookupOfficialWeatherDegreeDay } from "../services/mgm-sync.js";
 
 const router = Router();
 
-// ── MGM Gün Derece Havuzu'ndan HDD/CDD otomatik çekme ────────────
+// ── MGM Resmi HDD/CDD lookup — YALNIZCA resmi weather_degree_days ─
 interface MgmLookupResult {
   hdd: number;
   cdd: number;
   stationName: string;
   stationNote: string | null;
-  dataMethod: "official_monthly" | "calculated_daily" | "fallback";
+  dataMethod: "official_monthly";
 }
 
 async function autoLookupHddCdd(location: string, year: number, month: number): Promise<MgmLookupResult | null> {
   try {
     const { il, ilce } = parseIlIlce(location);
 
-    // 1. Önce resmi MGM aylık veriyi kontrol et (weather_degree_days, is_official=true)
-    const official = await lookupOfficialWeatherDegreeDay(il, year, month);
-    if (official) {
-      const lookup = findStationByIlIlce(il, ilce);
-      const fallbackNote = lookup?.isFallback && ilce
-        ? `"${location}" için birebir MGM istasyonu bulunamadı. ${il} iline ait resmi veri kullanıldı.`
+    // 1. İlçe varsa → ilçe bazlı station_key ile ara
+    if (ilce) {
+      const sk = toStationKey(il, ilce);
+      const official = await lookupOfficialByStationKey(sk, year, month);
+      if (official) {
+        return {
+          hdd: official.hdd,
+          cdd: official.cdd,
+          stationName: official.stationName ?? ilce,
+          stationNote: official.stationNote ?? null,
+          dataMethod: "official_monthly",
+        };
+      }
+    }
+
+    // 2. İl merkezi station_key ile ara
+    const ilKey = toStationKey(il, null);
+    const officialByIl = await lookupOfficialByStationKey(ilKey, year, month);
+    if (officialByIl) {
+      const note = ilce
+        ? `"${ilce}" için özel MGM istasyonu resmi verisi bulunamadı. ${il} ili merkezi resmi verisi kullanıldı.`
         : null;
       return {
-        hdd: official.hdd,
-        cdd: official.cdd,
-        stationName: official.stationName ?? il,
-        stationNote: official.stationNote ?? fallbackNote,
+        hdd: officialByIl.hdd,
+        cdd: officialByIl.cdd,
+        stationName: officialByIl.stationName ?? il,
+        stationNote: officialByIl.stationNote ?? note,
         dataMethod: "official_monthly",
       };
     }
 
-    // 2. Resmi veri yoksa → MGM Open-Meteo havuzundan (günlük veriden hesaplanmış)
-    const lookup = findStationByIlIlce(il, ilce);
-    if (lookup) {
-      const { station, isFallback } = lookup;
-      const data = await lookupDegreeData(station.stationCode, year, month);
-      if (data) {
-        const stationNote = isFallback
-          ? `"${location}" için birebir MGM istasyonu bulunamadı. ${il} iline ait "${station.name}" istasyonu kullanıldı.`
-          : null;
-        return { hdd: data.hdd, cdd: data.cdd, stationName: station.name, stationNote, dataMethod: "calculated_daily" };
-      }
-    }
-
-    // 3. İl de bulunamadı → coğrafi merkez fallback
-    const nearest = findNearestStation(39.0, 35.0);
-    const data = await lookupDegreeData(nearest.stationCode, year, month);
-    if (data) {
+    // 3. Province text match (eski kayıtlar için geriye uyum)
+    const officialByProv = await lookupOfficialWeatherDegreeDay(il, year, month);
+    if (officialByProv) {
+      const note = ilce
+        ? `"${ilce}" için özel MGM istasyonu resmi verisi bulunamadı. ${il} ili resmi verisi kullanıldı.`
+        : null;
       return {
-        hdd: data.hdd,
-        cdd: data.cdd,
-        stationName: nearest.name,
-        stationNote: `"${location}" için MGM istasyonu bulunamadı. En yakın varsayılan istasyon "${nearest.name}" kullanıldı.`,
-        dataMethod: "fallback",
+        hdd: officialByProv.hdd,
+        cdd: officialByProv.cdd,
+        stationName: officialByProv.stationName ?? il,
+        stationNote: officialByProv.stationNote ?? note,
+        dataMethod: "official_monthly",
       };
     }
 
+    // Resmi MGM verisi bulunamadı — Open-Meteo/sentetik fallback YOK
     return null;
   } catch {
     return null;
@@ -158,7 +163,7 @@ router.post("/consumption", requireAuth, async (req, res) => {
       res.status(409).json({ error: `Bu sayaç ve dönem (${yr}/${mo}) için kayıt zaten mevcut` }); return;
     }
 
-    // HDD/CDD: kullanıcı manuel girdiyse kullan, yoksa MGM havuzundan otomatik çek
+    // HDD/CDD: kullanıcı manuel girdiyse kullan, yoksa YALNIZCA resmi MGM havuzundan çek
     let hddVal: number | null = null;
     let cddVal: number | null = null;
     let weatherStationName: string | null = null;
@@ -172,7 +177,7 @@ router.post("/consumption", requireAuth, async (req, res) => {
       cddVal = parseFloat(cdd);
     }
 
-    // Otomatik çekme: hem hdd hem cdd boşsa
+    // Otomatik çekme: hem hdd hem cdd boşsa — YALNIZCA resmi MGM
     if (hddVal === null && cddVal === null && meter.city) {
       const mgmResult = await autoLookupHddCdd(meter.city, yr, mo);
       if (mgmResult) {
@@ -180,7 +185,11 @@ router.post("/consumption", requireAuth, async (req, res) => {
         cddVal = mgmResult.cdd;
         weatherStationName = mgmResult.stationName;
         weatherStationNote = mgmResult.stationNote;
-        weatherDataMethod = mgmResult.dataMethod ?? null;
+        weatherDataMethod = mgmResult.dataMethod;
+      } else {
+        // Resmi MGM verisi yok — Open-Meteo/sentetik fallback KULLANILMIYOR
+        weatherDataMethod = "no_official_data";
+        weatherStationNote = `Bu dönem (${yr}/${mo}) ve lokasyon ("${meter.city}") için resmi MGM HDD/CDD verisi bulunamadı. Veri senkronizasyonu için yöneticinize başvurun.`;
       }
     }
 
@@ -320,13 +329,14 @@ router.post("/consumption/batch", requireAuth, async (req, res) => {
         let hddVal: number | null = row.hdd !== undefined && row.hdd !== "" ? parseFloat(String(row.hdd)) : null;
         let cddVal: number | null = row.cdd !== undefined && row.cdd !== "" ? parseFloat(String(row.cdd)) : null;
 
-        // Batch'te de HDD/CDD boşsa otomatik çek
+        // Batch'te de HDD/CDD boşsa YALNIZCA resmi MGM'den çek
         if (hddVal === null && cddVal === null && meter.city) {
           const mgmResult = await autoLookupHddCdd(meter.city, year, month);
           if (mgmResult) {
             hddVal = mgmResult.hdd;
             cddVal = mgmResult.cdd;
           }
+          // Resmi veri yoksa null bırak — sentetik/Open-Meteo fallback yok
         }
 
         // Dönem bazlı duplicate kontrolü (batch)

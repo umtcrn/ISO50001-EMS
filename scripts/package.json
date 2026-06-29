@@ -9,6 +9,7 @@
     "seed:internal": "tsx ./src/seed-internal.ts",
     "export:internal": "tsx ./src/export-internal.ts",
     "import:internal": "tsx ./src/import-internal.ts",
+    "sync:mgm-degree-days": "tsx ./src/sync-mgm-degree-days.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {

@@ -505,6 +505,7 @@ export const weatherDegreeDaysTable = pgTable("weather_degree_days", {
   companyId: integer("company_id").references(() => companiesTable.id),
   province: text("province").notNull(),
   district: text("district"),
+  stationKey: text("station_key"),
   stationCode: text("station_code"),
   stationName: text("station_name"),
   date: text("date").notNull(), // YYYY-MM for monthly, YYYY for yearly
@@ -515,6 +516,10 @@ export const weatherDegreeDaysTable = pgTable("weather_degree_days", {
   baseTemperatureCooling: real("base_temperature_cooling").notNull().default(22),
   hdd: real("hdd").notNull().default(0),
   cdd: real("cdd").notNull().default(0),
+  hddDays: integer("hdd_days"),
+  cddDays: integer("cdd_days"),
+  annualHdd: real("annual_hdd"),
+  annualCdd: real("annual_cdd"),
   avgTemperature: real("avg_temperature"),
   source: text("source").notNull().default("mgm"),
   sourceUrl: text("source_url"),

@@ -1,0 +1,112 @@
+Projede HDD/CDD verileri için kalıcı ve merkezi MGM veri havuzu oluşturmak istiyorum.
+
+Amaç:
+MGM resmi gün-derece sayfasındaki tüm merkezlerin son 10 yıla ait yıllık/aylık HDD/CDD değerlerini sistem seviyesinde tek resmi kaynak olarak tutmak. Tüm company/tenant/user kayıtları bu ortak MGM veri havuzundan okuma yapmalı. Her firma için ayrı veri çekilmemeli.
+
+Kaynak:
+https://mgm.gov.tr/veridegerlendirme/gun-derece.aspx?g=yillik
+
+İstenen mimari:
+
+1. MGM verisi company_id’ye bağlı olmamalı.
+   - Bu veri tüm sistem için ortaktır.
+   - weather_degree_days tablosu global/system-level tablo olarak kullanılmalı.
+   - Tüm firmalar ve kullanıcılar aynı resmi MGM tablosundan veri çekmeli.
+
+2. Son 10 yıla ait tüm MGM merkez verileri çekilmeli.
+   - Her yıl için MGM yıllık gün-derece sayfasındaki tüm merkezler parse edilmeli.
+   - HDD aylık değerleri alınmalı.
+   - CDD aylık değerleri alınmalı.
+   - Mümkünse T≤15 gün sayısı ve T>22 gün sayısı da alınmalı.
+   - Yıllık toplam değerler de saklanmalı.
+
+3. Veri saklama yapısı:
+   - Kaynak dosya olarak JSON tutulmalı.
+   - Tercihen yıl bazlı JSON:
+     artifacts/api-server/src/data/mgm-degree-days/mgm-degree-days-YYYY.json
+   - Ayrıca bu JSON verileri weather_degree_days tablosuna import edilmeli.
+   - Uygulama runtime’da JSON dosyasından değil, PostgreSQL weather_degree_days tablosundan okumalı.
+
+4. Gerekirse şu tabloları oluştur veya mevcutları güncelle:
+
+   mgm_weather_stations:
+   - id
+   - station_key unique
+   - station_name
+   - province
+   - district nullable
+   - display_name
+   - is_active
+   - created_at
+   - updated_at
+
+   weather_degree_days:
+   - id
+   - station_key
+   - station_name
+   - province
+   - district nullable
+   - year
+   - month
+   - hdd numeric
+   - cdd numeric
+   - hdd_days integer nullable
+   - cdd_days integer nullable
+   - annual_hdd numeric nullable
+   - annual_cdd numeric nullable
+   - source text default 'MGM'
+   - source_url text
+   - is_official boolean default true
+   - imported_at timestamp
+   - created_at timestamp
+   - updated_at timestamp
+
+5. Unique constraint ekle:
+   - station_key + year + month unique olmalı.
+
+6. Performans için index ekle:
+   - station_key, year, month
+   - province, district
+   - station_name, year, month
+
+7. MGM veri çekme scripti oluştur:
+   - scripts/src/sync-mgm-degree-days.ts
+   - Son 10 yılı çeksin.
+   - Tüm merkezleri parse etsin.
+   - JSON dosyalarını oluştursun/güncellesin.
+   - DB’ye upsert etsin.
+   - Aynı kayıt varsa duplicate oluşturmasın.
+   - Değişen kayıt varsa güncellesin.
+   - Log olarak kaç kayıt eklendi/güncellendi/atlandı yazsın.
+
+8. Otomatik güncelleme endpoint’i oluştur:
+   - POST /api/admin/weather-degree-days/sync
+   - Sadece superadmin veya admin erişebilsin.
+   - İsteğe bağlı year parametresi alsın.
+   - Parametre yoksa mevcut yıl ve bir önceki yılı kontrol etsin.
+   - Yeni ay verisi varsa upsert etsin.
+
+9. Periyodik güncelleme kurgusu:
+   - Replit Scheduled Deployment / cron kullanılabiliyorsa haftada 1 çalışacak şekilde ayarla.
+   - Çalıştırılacak script:
+     pnpm --filter @workspace/scripts run sync:mgm-degree-days
+   - Eğer Replit cron yoksa endpoint manuel tetiklenebilir olmalı.
+
+10. Consumption create/update akışını güncelle:
+   - Tüketim kaydı için HDD/CDD yalnızca weather_degree_days tablosundaki resmi MGM verisinden gelsin.
+   - MGM resmi veri yoksa Open-Meteo/fallback değeri consumption.hdd/cdd alanına yazılmasın.
+   - Resmi veri yoksa kullanıcıya “Bu dönem ve lokasyon için resmi MGM HDD/CDD verisi bulunamadı” mesajı gösterilsin.
+
+11. Değişkenler modülünü güncelle:
+   - HDD/CDD değişkenleri resmi MGM tablosundan beslensin.
+   - Resmi veri yoksa hesaplanan ondalıklı değer üretilmesin.
+
+12. Test örnekleri:
+   - Van Merkez 2024 Ocak HDD MGM ile aynı olmalı.
+   - Van Merkez 2024 Şubat HDD MGM ile aynı olmalı.
+   - Van Merkez 2025 Ocak HDD MGM ile aynı olmalı.
+   - Van / Erciş seçilirse ERCİŞ MGM merkezi kullanılmalı.
+   - Ağrı / Doğubeyazıt seçilirse DOĞUBEYAZIT MGM merkezi kullanılmalı.
+   - Ondalıklı 495.8, 437.9 gibi fallback değerler artık resmi tüketim HDD/CDD alanına yazılmamalı.
+
+13. Typecheck ve build çalıştır.

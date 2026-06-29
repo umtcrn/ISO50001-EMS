@@ -5,15 +5,32 @@ import { MGM_STATIONS, type StationSeed } from "./mgm-stations-data.js";
 // ── MGM Resmi Baz Sıcaklıkları ─────────────────────────────────────
 // HDD: Tm ≤ 15°C eşiği → HDD = 18 - Tm  (eşik: 15, baz: 18)
 // CDD: Tm > 22°C eşiği → CDD = Tm - 22
-const HDD_BASE_THRESHOLD = 15; // Isıtma sezonuna giriş eşiği
-const HDD_BASE_TEMP = 18;      // Referans sıcaklık (MGM resmi metodoloji)
+const HDD_BASE_THRESHOLD = 15;
+const HDD_BASE_TEMP = 18;
 const CDD_BASE = 22;
 
-// Veri kaynağı versiyonu — değiştiğinde DB yeniden seed edilir
 const DATA_VERSION = "v7_correct_hdd_18base";
-
-// ── Open-Meteo Archive API ─────────────────────────────────────────
 const OPEN_METEO_URL = "https://archive-api.open-meteo.com/v1/archive";
+
+// ── Türkçe → ASCII station_key ─────────────────────────────────────
+export function toStationKey(il: string, ilce: string | null): string {
+  const base = ilce ?? il;
+  return base
+    .toLowerCase()
+    .replace(/ğ/g, "g")
+    .replace(/ü/g, "u")
+    .replace(/ş/g, "s")
+    .replace(/ı/g, "i")
+    .replace(/ö/g, "o")
+    .replace(/ç/g, "c")
+    .replace(/â/g, "a")
+    .replace(/î/g, "i")
+    .replace(/û/g, "u")
+    .replace(/\s+/g, "-")
+    .replace(/[^\w-]/g, "")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+}
 
 interface MonthlyDegreeDay {
   year: number;
@@ -66,7 +83,6 @@ async function fetchOpenMeteoMonthly(
       if (!monthly.has(key)) monthly.set(key, { hdd: 0, cdd: 0, days: 0 });
       const entry = monthly.get(key)!;
       const tmean = (tmax[i] + tmin[i]) / 2;
-      // MGM resmi metodoloji: eşik 15°C, baz sıcaklık 18°C
       entry.hdd += tmean <= HDD_BASE_THRESHOLD ? (HDD_BASE_TEMP - tmean) : 0;
       entry.cdd += Math.max(tmean - CDD_BASE, 0);
       entry.days++;
@@ -78,7 +94,7 @@ async function fetchOpenMeteoMonthly(
   throw lastError ?? new Error("fetchOpenMeteoMonthly failed after retries");
 }
 
-// ── Fallback: Sentetik hesaplama (API başarısız olursa) ─────────────
+// ── Fallback: Sentetik hesaplama ────────────────────────────────────
 function seededRandom(seed: number): number {
   const x = Math.sin(seed) * 10000;
   return x - Math.floor(x);
@@ -118,7 +134,6 @@ function syntheticHddCdd(
   const actualMeanTemp = climateMean + warmingOffset + variability;
   const sigma = stationSigma(station, month);
 
-  // Sentetik hesapta da aynı eşik/baz kullan
   const dH = HDD_BASE_TEMP - actualMeanTemp;
   const hdd = Math.max(0, Math.round((dH * normalCDF(dH / sigma) + sigma * normalPDF(dH / sigma)) * days * 10) / 10);
   const dC = actualMeanTemp - CDD_BASE;
@@ -133,7 +148,7 @@ function daysInMonth(month: number, year: number): number {
   return DAYS_IN_MONTH[month - 1];
 }
 
-// ── Veri versiyonu kontrolü ────────────────────────────────────────
+// ── Veri versiyonu kontrolü ─────────────────────────────────────────
 async function isDataVersionCurrent(): Promise<boolean> {
   const log = await db.select({ notes: mgmSyncLogTable.notes })
     .from(mgmSyncLogTable)
@@ -153,7 +168,7 @@ async function markDataVersionCurrent(): Promise<void> {
   });
 }
 
-// ── Seed stations ──────────────────────────────────────────────────
+// ── Seed stations ───────────────────────────────────────────────────
 export async function seedStationsIfEmpty(): Promise<void> {
   const existing = await db.select({ id: mgmStationsTable.id }).from(mgmStationsTable).limit(1);
   if (existing.length > 0) return;
@@ -171,7 +186,7 @@ export async function seedStationsIfEmpty(): Promise<void> {
   console.log(`[MGM] ${values.length} istasyon kaydedildi.`);
 }
 
-// ── Seed/reseed degree data (Open-Meteo + fallback) ───────────────
+// ── Seed/reseed degree data (Open-Meteo + fallback) ─────────────────
 export async function seedDegreeDataIfEmpty(): Promise<void> {
   const isCurrent = await isDataVersionCurrent();
   if (isCurrent) return;
@@ -251,7 +266,7 @@ export async function seedDegreeDataIfEmpty(): Promise<void> {
   console.log(`[MGM] Seed tamamlandı (${DATA_VERSION}): ${totalInserted} kayıt — ${apiSuccess} istasyon Open-Meteo, ${apiFallback} sentetik.`);
 }
 
-// ── Daily sync: current & previous month (Open-Meteo) ─────────────
+// ── Daily sync: current & previous month (Open-Meteo) ──────────────
 export async function syncCurrentMonthData(): Promise<{ synced: number; errors: number }> {
   const now = new Date();
   const currentYear = now.getFullYear();
@@ -356,7 +371,32 @@ export async function lookupDegreeData(
   return rows.length > 0 ? rows[0] : null;
 }
 
-// ── Resmi MGM aylık veri lookup (weather_degree_days) ─────────────
+// ── Resmi MGM: station_key ile arama ──────────────────────────────
+export async function lookupOfficialByStationKey(
+  stationKey: string,
+  year: number,
+  month: number
+): Promise<{ hdd: number; cdd: number; stationName: string | null; stationNote: string | null } | null> {
+  const rows = await db
+    .select({
+      hdd: weatherDegreeDaysTable.hdd,
+      cdd: weatherDegreeDaysTable.cdd,
+      stationName: weatherDegreeDaysTable.stationName,
+      stationNote: weatherDegreeDaysTable.stationNote,
+    })
+    .from(weatherDegreeDaysTable)
+    .where(and(
+      eq(weatherDegreeDaysTable.stationKey as any, stationKey),
+      eq(weatherDegreeDaysTable.year as any, year),
+      eq(weatherDegreeDaysTable.month as any, month),
+      eq(weatherDegreeDaysTable.isOfficial, true),
+      eq(weatherDegreeDaysTable.periodType, "monthly"),
+    ))
+    .limit(1);
+  return rows.length > 0 ? rows[0] : null;
+}
+
+// ── Resmi MGM: il (province) ile arama — ilçe fallback ─────────────
 export async function lookupOfficialWeatherDegreeDay(
   province: string,
   year: number,
@@ -372,8 +412,8 @@ export async function lookupOfficialWeatherDegreeDay(
     .from(weatherDegreeDaysTable)
     .where(and(
       eq(weatherDegreeDaysTable.province, province),
-      eq(weatherDegreeDaysTable.year, year),
-      eq(weatherDegreeDaysTable.month, month),
+      eq(weatherDegreeDaysTable.year as any, year),
+      eq(weatherDegreeDaysTable.month as any, month),
       eq(weatherDegreeDaysTable.isOfficial, true),
       eq(weatherDegreeDaysTable.periodType, "monthly"),
     ))
@@ -381,11 +421,11 @@ export async function lookupOfficialWeatherDegreeDay(
   return rows.length > 0 ? rows[0] : null;
 }
 
-// ── Resmi MGM aylık veri seed (Van 2024 demo/test) ────────────────
+// ── Resmi MGM aylık veri seed (Van 2024 demo/test) ─────────────────
 export async function seedOfficialWeatherData(): Promise<void> {
   const officialData = [
-    { province: "Van", district: null as string | null, stationName: "Van MGM", year: 2024, month: 1, hdd: 528, cdd: 0 },
-    { province: "Van", district: null as string | null, stationName: "Van MGM", year: 2024, month: 2, hdd: 498, cdd: 0 },
+    { province: "Van", district: null as string | null, stationKey: "van", stationName: "VAN", year: 2024, month: 1, hdd: 528, cdd: 0 },
+    { province: "Van", district: null as string | null, stationKey: "van", stationName: "VAN", year: 2024, month: 2, hdd: 498, cdd: 0 },
   ];
 
   let seeded = 0;
@@ -394,9 +434,9 @@ export async function seedOfficialWeatherData(): Promise<void> {
       .select({ id: weatherDegreeDaysTable.id })
       .from(weatherDegreeDaysTable)
       .where(and(
-        eq(weatherDegreeDaysTable.province, d.province),
-        eq(weatherDegreeDaysTable.year, d.year),
-        eq(weatherDegreeDaysTable.month, d.month),
+        eq(weatherDegreeDaysTable.stationKey as any, d.stationKey),
+        eq(weatherDegreeDaysTable.year as any, d.year),
+        eq(weatherDegreeDaysTable.month as any, d.month),
         eq(weatherDegreeDaysTable.isOfficial, true),
       ))
       .limit(1);
@@ -408,6 +448,7 @@ export async function seedOfficialWeatherData(): Promise<void> {
       companyId: null,
       province: d.province,
       district: d.district,
+      stationKey: d.stationKey as any,
       stationCode: null,
       stationName: d.stationName,
       date,
@@ -424,7 +465,7 @@ export async function seedOfficialWeatherData(): Promise<void> {
       dataMethod: "official_monthly",
       stationNote: null,
       importedAt: new Date(),
-    });
+    } as any);
     seeded++;
   }
   if (seeded > 0) {
