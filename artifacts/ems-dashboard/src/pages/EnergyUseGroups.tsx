@@ -41,10 +41,12 @@ const apiMutate = (token: string | null, method: string, url: string, body?: unk
   }).then(r => r.ok ? (r.status === 204 ? null : r.json()) : r.json().then((e: any) => { throw new Error(e.error); }));
 
 export default function EnergyUseGroups() {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { companyId } = useCompany();
+
+  const isPrivileged = user?.role === "superadmin" || user?.role === "admin";
 
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -70,13 +72,14 @@ export default function EnergyUseGroups() {
     enabled: !!token,
   });
 
-  const groupsKey = ["energy-use-groups", filterUnit, filterSource, filterActive, companyId];
+  const groupsKey = ["energy-use-groups", isPrivileged ? filterUnit : "own", filterSource, filterActive, companyId];
   const { data: groups, isLoading } = useQuery<any[]>({
     queryKey: groupsKey,
     queryFn: () => {
       const p = new URLSearchParams();
       if (filterActive !== "all") p.set("isActive", filterActive);
-      if (filterUnit !== "all") p.set("unitId", filterUnit);
+      // Only privileged users can filter by unit; standard users rely on backend scoping
+      if (isPrivileged && filterUnit !== "all") p.set("unitId", filterUnit);
       if (filterSource !== "all") p.set("energySourceId", filterSource);
       if (companyId) p.set("companyId", companyId.toString());
       return apiFetch(token, `/api/energy-use-groups?${p}`);
@@ -168,13 +171,15 @@ export default function EnergyUseGroups() {
             <SelectItem value="false">Pasif</SelectItem>
           </SelectContent>
         </Select>
-        <Select value={filterUnit} onValueChange={setFilterUnit}>
-          <SelectTrigger className="w-44"><SelectValue placeholder="Birim" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Tüm Birimler</SelectItem>
-            {(allUnits ?? []).map((u: any) => <SelectItem key={u.id} value={u.id.toString()}>{u.name}</SelectItem>)}
-          </SelectContent>
-        </Select>
+        {isPrivileged && (
+          <Select value={filterUnit} onValueChange={setFilterUnit}>
+            <SelectTrigger className="w-44"><SelectValue placeholder="Birim" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Tüm Birimler</SelectItem>
+              {(allUnits ?? []).map((u: any) => <SelectItem key={u.id} value={u.id.toString()}>{u.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        )}
         <Select value={filterSource} onValueChange={setFilterSource}>
           <SelectTrigger className="w-44"><SelectValue placeholder="Enerji kaynağı" /></SelectTrigger>
           <SelectContent>

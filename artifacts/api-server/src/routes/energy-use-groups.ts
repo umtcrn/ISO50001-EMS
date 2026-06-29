@@ -8,21 +8,37 @@ const router = Router();
 // GET /api/energy-use-groups
 router.get("/energy-use-groups", requireAuth, async (req, res) => {
   try {
-    const { role, companyId: sessionCompanyId } = req.user!;
+    const { role, companyId: sessionCompanyId, unitId: sessionUnitId } = req.user!;
     const { isActive, groupType, energySourceId, unitId, subUnitId, companyId: qCompanyId } = req.query;
+
+    const isPrivileged = role === "superadmin" || role === "admin";
+
+    // Standard users must have a unitId; without one return empty list
+    if (!isPrivileged && sessionUnitId === null) {
+      res.json([]); return;
+    }
 
     const rows = await db.select().from(energyUseGroupsTable).orderBy(energyUseGroupsTable.name);
 
     const filtered = rows.filter(g => {
+      // Company isolation
       if (role === "superadmin") {
         if (qCompanyId && g.companyId !== parseInt(qCompanyId as string)) return false;
       } else {
         if (g.companyId !== sessionCompanyId) return false;
       }
+
+      // Unit isolation: standard users are always scoped to their own unitId
+      if (!isPrivileged) {
+        if (g.unitId !== sessionUnitId) return false;
+      } else {
+        // Admins can optionally filter by unitId query param
+        if (unitId && g.unitId !== parseInt(unitId as string)) return false;
+      }
+
       if (isActive !== undefined && g.isActive !== (isActive === "true")) return false;
       if (groupType && g.groupType !== groupType) return false;
       if (energySourceId && g.energySourceId !== parseInt(energySourceId as string)) return false;
-      if (unitId && g.unitId !== parseInt(unitId as string)) return false;
       if (subUnitId && g.subUnitId !== parseInt(subUnitId as string)) return false;
       return true;
     });
