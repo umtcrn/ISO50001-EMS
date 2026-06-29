@@ -211,9 +211,13 @@ router.get("/dashboard/target-status", requireAuth, async (req, res) => {
     const unitIdParam = req.query.unitId ? parseInt(req.query.unitId as string) : undefined;
     const energySourceIdParam = req.query.energySourceId ? parseInt(req.query.energySourceId as string) : undefined;
     const statusParam = req.query.status as string | undefined;
+    const queryCompanyId = req.query.companyId ? parseInt(req.query.companyId as string) : undefined;
+    // admin: kendi şirketi; superadmin: query'den veya filtre yok (tüm şirketler)
+    const effectiveCompanyId = role === "admin" ? sessionCompanyId : queryCompanyId;
 
-    const conds: SQL[] = [eq(energyTargetsTable.companyId, sessionCompanyId)];
-    if (year !== undefined) conds.push(eq(energyTargetsTable.targetYear, year));
+    const conds: SQL[] = [];
+    if (effectiveCompanyId !== undefined) conds.push(eq(energyTargetsTable.companyId, effectiveCompanyId));
+    // year filtresi SQL'den kaldırıldı — JS katmanında baselineYear <= year <= targetYear mantığıyla uygulanır
     if (energySourceIdParam !== undefined) conds.push(eq(energyTargetsTable.energySourceId, energySourceIdParam));
     if (statusParam) conds.push(eq(energyTargetsTable.status, statusParam));
     if (role !== "admin" && role !== "superadmin") {
@@ -247,12 +251,21 @@ router.get("/dashboard/target-status", requireAuth, async (req, res) => {
       .where(conds.length === 1 ? conds[0] : and(...conds))
       .orderBy(energyTargetsTable.createdAt);
 
-    if (targets.length === 0) {
+    // JS katmanında year filtresi: baselineYear <= selectedYear <= targetYear
+    const activeTargets = year !== undefined
+      ? targets.filter(t => {
+          const baseline = t.baselineYear ?? 0;
+          const targetY = t.targetYear ?? 9999;
+          return baseline <= year && year <= targetY;
+        })
+      : targets;
+
+    if (activeTargets.length === 0) {
       res.json({ items: [] });
       return;
     }
 
-    const targetIds = targets.map(t => t.id);
+    const targetIds = activeTargets.map(t => t.id);
 
     const [allProgress, allActions] = await Promise.all([
       db.select()
@@ -275,9 +288,13 @@ router.get("/dashboard/target-status", requireAuth, async (req, res) => {
       actionCountByTarget[a.targetId] = (actionCountByTarget[a.targetId] ?? 0) + 1;
     }
 
-    const items = targets.map(t => {
+    const items = activeTargets.map(t => {
       const progressList = progressByTarget[t.id] ?? [];
-      const sorted = [...progressList].sort((a, b) => {
+      // latestProgress: seçili yıla ait progress kayıtları öncelikli; yoksa hedef listeye dahil ama latestProgress null
+      const yearProgress = year !== undefined
+        ? progressList.filter(p => p.periodYear === year)
+        : progressList;
+      const sorted = [...yearProgress].sort((a, b) => {
         if (b.periodYear !== a.periodYear) return b.periodYear - a.periodYear;
         return (b.periodMonth ?? 0) - (a.periodMonth ?? 0);
       });
@@ -360,7 +377,11 @@ router.get("/dashboard/action-status", requireAuth, async (req, res) => {
     const priorityParam = req.query.priority as string | undefined;
     const isVapParam = req.query.isVap !== undefined ? req.query.isVap === "true" : undefined;
 
-    const actionConds: SQL[] = [eq(energyActionPlansTable.companyId, sessionCompanyId)];
+    const queryCompanyIdAction = req.query.companyId ? parseInt(req.query.companyId as string) : undefined;
+    const effectiveCompanyIdAction = role === "admin" ? sessionCompanyId : queryCompanyIdAction;
+
+    const actionConds: SQL[] = [];
+    if (effectiveCompanyIdAction !== undefined) actionConds.push(eq(energyActionPlansTable.companyId, effectiveCompanyIdAction));
     if (statusParam) actionConds.push(eq(energyActionPlansTable.status, statusParam));
     if (priorityParam) actionConds.push(eq(energyActionPlansTable.priority, priorityParam));
     if (isVapParam !== undefined) actionConds.push(eq(energyActionPlansTable.isVap, isVapParam));
@@ -371,6 +392,7 @@ router.get("/dashboard/action-status", requireAuth, async (req, res) => {
       status: energyActionPlansTable.status,
       priority: energyActionPlansTable.priority,
       progressPercent: energyActionPlansTable.progressPercent,
+      startDate: energyActionPlansTable.startDate,
       dueDate: energyActionPlansTable.dueDate,
       isVap: energyActionPlansTable.isVap,
       expectedCostSaving: energyActionPlansTable.expectedCostSaving,
@@ -379,6 +401,7 @@ router.get("/dashboard/action-status", requireAuth, async (req, res) => {
       targetId: energyActionPlansTable.targetId,
       targetName: energyTargetsTable.name,
       targetUnitId: energyTargetsTable.unitId,
+      targetBaselineYear: energyTargetsTable.baselineYear,
       targetYear: energyTargetsTable.targetYear,
       unitName: unitsTable.name,
     })
@@ -388,7 +411,20 @@ router.get("/dashboard/action-status", requireAuth, async (req, res) => {
       .where(actionConds.length === 1 ? actionConds[0] : and(...actionConds));
 
     let filtered = rows;
-    if (year !== undefined) filtered = filtered.filter(r => r.targetYear === year);
+    if (year !== undefined) {
+      filtered = filtered.filter(r => {
+        // Eylem planının kendi tarih aralığı varsa onu kullan
+        if (r.startDate || r.dueDate) {
+          const startY = r.startDate ? new Date(r.startDate).getFullYear() : 0;
+          const endY = r.dueDate ? new Date(r.dueDate).getFullYear() : 9999;
+          return startY <= year && year <= endY;
+        }
+        // Yoksa bağlı hedefin aktif yıl aralığını kullan
+        const baselineY = r.targetBaselineYear ?? 0;
+        const targetY = r.targetYear ?? 9999;
+        return baselineY <= year && year <= targetY;
+      });
+    }
     if (role !== "admin" && role !== "superadmin") {
       filtered = filtered.filter(r => r.targetUnitId === sessionUnitId);
     } else if (role === "admin" && unitIdParam !== undefined) {
@@ -483,7 +519,11 @@ router.get("/dashboard/vap-summary", requireAuth, async (req, res) => {
     const statusParam = req.query.status as string | undefined;
     const feasibilityStatusParam = req.query.feasibilityStatus as string | undefined;
 
-    const vapConds: SQL[] = [eq(vapProjectsTable.companyId, sessionCompanyId)];
+    const queryCompanyIdVap = req.query.companyId ? parseInt(req.query.companyId as string) : undefined;
+    const effectiveCompanyIdVap = role === "admin" ? sessionCompanyId : queryCompanyIdVap;
+
+    const vapConds: SQL[] = [];
+    if (effectiveCompanyIdVap !== undefined) vapConds.push(eq(vapProjectsTable.companyId, effectiveCompanyIdVap));
     if (statusParam) vapConds.push(eq(vapProjectsTable.status, statusParam));
     if (feasibilityStatusParam) vapConds.push(eq(vapProjectsTable.feasibilityStatus, feasibilityStatusParam));
 
@@ -504,8 +544,11 @@ router.get("/dashboard/vap-summary", requireAuth, async (req, res) => {
       startDate: vapProjectsTable.startDate,
       endDate: vapProjectsTable.endDate,
       actionPlanIsVap: energyActionPlansTable.isVap,
+      actionPlanStartDate: energyActionPlansTable.startDate,
+      actionPlanDueDate: energyActionPlansTable.dueDate,
       targetName: energyTargetsTable.name,
       targetUnitId: energyTargetsTable.unitId,
+      targetBaselineYear: energyTargetsTable.baselineYear,
       targetYear: energyTargetsTable.targetYear,
       unitName: unitsTable.name,
       energySourceName: energySourcesTable.name,
@@ -519,7 +562,26 @@ router.get("/dashboard/vap-summary", requireAuth, async (req, res) => {
       .orderBy(vapProjectsTable.createdAt);
 
     let filtered = rows.filter(r => r.actionPlanIsVap === true);
-    if (year !== undefined) filtered = filtered.filter(r => r.targetYear === year);
+    if (year !== undefined) {
+      filtered = filtered.filter(r => {
+        // Öncelik: VAP'ın kendi startDate/endDate tarihleri
+        if (r.startDate || r.endDate) {
+          const startY = r.startDate ? new Date(r.startDate).getFullYear() : 0;
+          const endY = r.endDate ? new Date(r.endDate).getFullYear() : 9999;
+          return startY <= year && year <= endY;
+        }
+        // Sonra: bağlı action plan'ın tarihleri
+        if (r.actionPlanStartDate || r.actionPlanDueDate) {
+          const startY = r.actionPlanStartDate ? new Date(r.actionPlanStartDate).getFullYear() : 0;
+          const endY = r.actionPlanDueDate ? new Date(r.actionPlanDueDate).getFullYear() : 9999;
+          return startY <= year && year <= endY;
+        }
+        // Son çare: bağlı hedefin aktif yıl aralığı
+        const baselineY = r.targetBaselineYear ?? 0;
+        const targetY = r.targetYear ?? 9999;
+        return baselineY <= year && year <= targetY;
+      });
+    }
     if (role !== "admin" && role !== "superadmin") {
       filtered = filtered.filter(r => r.targetUnitId === sessionUnitId);
     } else if (role === "admin" && unitIdParam !== undefined) {
@@ -601,10 +663,11 @@ router.get("/dashboard/seu-summary", requireAuth, async (req, res) => {
     const year = req.query.year ? parseInt(req.query.year as string) : undefined;
     const unitIdParam = req.query.unitId ? parseInt(req.query.unitId as string) : undefined;
 
-    const assessmentConds: SQL[] = [
-      eq(seuAssessmentsTable.companyId, sessionCompanyId),
-      eq(seuAssessmentsTable.recordType, "unit_official"),
-    ];
+    const queryCompanyIdSeu = req.query.companyId ? parseInt(req.query.companyId as string) : undefined;
+    const effectiveCompanyIdSeu = role === "admin" ? sessionCompanyId : queryCompanyIdSeu;
+
+    const assessmentConds: SQL[] = [eq(seuAssessmentsTable.recordType, "unit_official")];
+    if (effectiveCompanyIdSeu !== undefined) assessmentConds.push(eq(seuAssessmentsTable.companyId, effectiveCompanyIdSeu));
     if (year !== undefined) assessmentConds.push(eq(seuAssessmentsTable.year, year));
     if (role !== "admin" && role !== "superadmin") {
       assessmentConds.push(eq(seuAssessmentsTable.unitId, sessionUnitId!));

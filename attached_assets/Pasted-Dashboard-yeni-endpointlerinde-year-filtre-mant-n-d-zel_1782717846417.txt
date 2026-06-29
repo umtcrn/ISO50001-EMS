@@ -1,0 +1,62 @@
+Dashboard yeni endpointlerinde year filtre mantığını düzelt.
+
+Sorun:
+Dashboard 2025 yılı seçiliyken yeni ISO 50001 yönetim bölümleri 0 dönüyor:
+- target-status boş
+- action-status 0
+- vap-summary boş
+
+Ancak aynı ekranda eski hedef özeti hedef olduğunu gösteriyor. Bu, year filtresinin targetYear = selectedYear şeklinde çok dar uygulanmasından kaynaklanıyor olabilir.
+
+Amaç:
+Dashboard yıl filtresi "hedef bitiş yılı" değil, "raporlama / izleme yılı" olarak çalışmalı.
+
+Yapılacaklar:
+
+1. GET /api/dashboard/target-status
+   - year filtresini sadece energyTargets.targetYear = year şeklinde uygulama.
+   - Hedef, seçili yılda aktifse dönmeli.
+   - Mantık:
+     baselineYear <= selectedYear <= targetYear
+     veya hedefin progress kayıtlarında periodYear = selectedYear varsa dahil et.
+   - energyTargets.status = active olan hedefler seçili yılda izlenebilir kabul edilsin.
+   - latestProgress yine seçili yıla ait en son progress kaydı üzerinden hesaplansın.
+   - Eğer seçili yılda progress yoksa hedef yine listelensin ama latestProgress null olabilir.
+
+2. GET /api/dashboard/action-status
+   - year filtresi sadece bağlı hedefin targetYear değerine göre yapılmasın.
+   - Eğer action plan startDate / dueDate varsa seçili yıl bu tarih aralığına denk geliyorsa dahil et.
+   - Eğer tarih alanları boşsa bağlı hedefin aktif yıl aralığına göre dahil et.
+   - Böylece 2025 yılında devam eden ama 2027 hedefli eylemler dashboard'da görünsün.
+
+3. GET /api/dashboard/vap-summary
+   - year filtresi sadece targetYear = year olmasın.
+   - VAP bağlı olduğu action plan veya hedef seçili yılda aktifse dönsün.
+   - action plan tarihleri varsa onları önceliklendir.
+   - Yoksa bağlı hedefin aktif yıl aralığını kullan.
+
+4. GET /api/dashboard/seu-summary
+   - SEU yıllık değerlendirme olduğu için mevcut year = assessment.year filtresi kalabilir.
+
+5. Frontend'e dokunma.
+6. OpenAPI'ye dokunma.
+7. Migration yapma.
+8. DB şemasını değiştirme.
+
+Test:
+1. pnpm run typecheck
+2. pnpm run build
+3. 2025 yılı için şu endpointleri admin token ile test et:
+   - /api/dashboard/target-status?year=2025
+   - /api/dashboard/action-status?year=2025
+   - /api/dashboard/vap-summary?year=2025
+4. 2025 dashboard'da hedef, eylem ve VAP verileri artık boş dönmüyor mu kontrol et.
+5. Scope güvenliği bozulmadı mı kontrol et.
+
+İş sonunda raporla:
+- Değişen dosyalar
+- Eski year filtre mantığı neydi?
+- Yeni year filtre mantığı ne oldu?
+- 2025 için endpoint sonuç sayıları
+- Typecheck sonucu
+- Build sonucu
