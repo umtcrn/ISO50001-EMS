@@ -1,0 +1,71 @@
+Import edilen 30.552 satırın gerçekten uygulamanın kullandığı aynı DATABASE_URL içinde olduğunu doğrula. API server hangi DATABASE_URL ile çalışıyor, import scripti hangi DATABASE_URL ile çalışıyor kontrol et. Farklı veritabanına import yapılmış olabilir.
+
+MGM lookup hâlâ kullanıcı tarafında doğru çalışmıyor.
+
+Kontrolümde sayaç il/ilçesini:
+- Van / Erciş
+- Bitlis / Tatvan
+
+seçmeme rağmen sistem “MGM verisi bulunamadı” diyor.
+
+Önce yeni kod yazmadan kök nedeni doğrula.
+
+1. Veritabanında mapping kayıtlarını kontrol et:
+   - SELECT * FROM mgm_station_mappings WHERE station_key IN ('ercis', 'tatvan');
+   - Ayrıca province/district ile ara:
+     - province ILIKE 'Van' AND district ILIKE 'Erciş'
+     - province ILIKE 'Bitlis' AND district ILIKE 'Tatvan'
+
+2. weather_degree_days tablosunda resmi verileri kontrol et:
+   - SELECT station_key, station_name, province, district, year, month, hdd, cdd
+     FROM weather_degree_days
+     WHERE station_key IN ('ercis', 'tatvan')
+       AND year IN (2024, 2025)
+     ORDER BY station_key, year, month;
+
+3. Eğer kayıt yoksa:
+   - Daha önce import edilen 30.552 satır aktif DB’de yok demektir.
+   - mgm_station_mapping_checked.xlsx ve mgm_degree_days_last_10_years_final.xlsx dosyalarından import scriptini tekrar çalıştır.
+   - pnpm --filter @workspace/scripts run import:mgm-excel
+   - Import sonrası tekrar satır sayılarını doğrula:
+     - mgm_station_mappings: 254 kayıt olmalı
+     - weather_degree_days: 30.552 kayıt olmalı
+     - ercis ve tatvan için 12 aylık yıl kayıtları olmalı
+
+4. Eğer DB’de kayıt var ama lookup bulamıyorsa:
+   - Tüketim formundan backend’e gelen payload’u logla.
+   - Özellikle şu alanları yazdır:
+     - meter.city
+     - meter.district
+     - parsed province
+     - parsed district
+     - resolved station_key
+     - lookup chain result
+
+5. Frontend sayaç lokasyonu hangi formatta gönderiyor kontrol et:
+   - “Erciş, Van”
+   - “Van / Erciş”
+   - province=Van, district=Erciş
+   - yoksa city=Erciş, district=boş mu?
+
+6. Mapping lookup kuralı şu olmalı:
+   - province + district eşleşmesi varsa doğrudan o station_key kullanılmalı.
+   - Van / Erciş → ercis
+   - Bitlis / Tatvan → tatvan
+   - Bu kayıtlar mapping tablosunda varsa no_official_data dönmemeli.
+   - weather_degree_days içinde ilgili station_key + year + month varsa official_monthly dönmeli.
+
+7. Kesin testler:
+   - GET /api/mgm/lookup?city=Erciş,%20Van&year=2024&month=1
+     Beklenen: station_key=ercis, official_monthly
+   - GET /api/mgm/lookup?city=Tatvan,%20Bitlis&year=2024&month=1
+     Beklenen: station_key=tatvan, official_monthly
+   - Aynı testleri tüketim formundan seçilen gerçek payload ile de yap.
+
+8. Önemli:
+   - Eğer weather_degree_days tablosu boşsa veya sadece elle eklenmiş Van kaydı varsa, bunu kod hatası gibi çözme.
+   - Önce Excel import verilerini aktif DB’ye tekrar yükle.
+   - Import kalıcı ve idempotent olmalı.
+   - Server restart sonrası veri kaybolmamalı.
+
+9. Bu doğrulamalar bitmeden frontend admin panel, warning badge veya yeni UI geliştirmesi yapma.
