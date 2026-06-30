@@ -1,0 +1,70 @@
+Kritik hata devam ediyor.
+
+Lokasyon eşleşmesi artık doğru: Edremit, Van için Nevşehir’e düşmüyor. Ancak 2026 yılı için resmi MGM HDD değeri 619 olması gerekirken sistem 637,8 gibi ondalıklı hesaplamalı değer gösteriyor.
+
+Bu şu anlama geliyor:
+- Lokasyon mapping düzeldi.
+- Ama 2026 resmi MGM kaydı bulunamadığında sistem hâlâ calculated_daily / Open-Meteo / günlük hesaplama fallback değerine düşüyor.
+- Bu davranış tamamen kapatılmalı.
+
+İstenen kesin kural:
+
+1. Tüketim ekranı, tüketim POST/PUT, refresh-weather endpoint, variables sync ve /api/mgm/lookup dahil tüm HDD/CDD akışları yalnızca weather_degree_days tablosundaki is_official=true kayıtları kullanmalı.
+
+2. Eğer station_key + year + month için resmi MGM kaydı varsa:
+   - hdd = official.hdd
+   - cdd = official.cdd
+   - weatherStationName = official.station_name
+   - weatherDataMethod = "official_monthly"
+   - weatherStationNote = "MGM Resmi Gün-Derece"
+
+3. Eğer resmi MGM kaydı yoksa:
+   - hdd = null
+   - cdd = null
+   - weatherDataMethod = "no_official_data"
+   - weatherStationName = null veya mapping station adı
+   - weatherStationNote = "Bu lokasyon ve dönem için resmi MGM HDD/CDD verisi bulunamadı."
+
+4. Aşağıdaki fallback davranışları hiçbir yerde kullanılmamalı:
+   - calculated_daily
+   - Open-Meteo
+   - nearest station
+   - default station
+   - synthetic weather
+   - günlük sıcaklıktan HDD/CDD hesaplama
+   - ondalıklı HDD/CDD üretme
+
+5. Özellikle şu endpointleri kontrol et:
+   - GET /api/mgm/lookup
+   - POST /api/consumption
+   - PUT/PATCH /api/consumption/:id varsa
+   - POST /api/admin/consumption/refresh-weather
+   - /api/weather-degree-days/sync veya variables sync endpointleri
+
+6. 2026 verisi için iki ayrı test yap:
+
+   Test A — 2026 resmi veri DB’de yoksa:
+   - Edremit, Van / 2026 Ocak
+   - Sonuç: hdd=null, cdd=null, weatherDataMethod="no_official_data"
+   - Kesinlikle 637,8 gibi hesaplamalı değer dönmemeli.
+
+   Test B — 2026 resmi veri DB’ye sync/import edildiyse:
+   - Edremit, Van / 2026 Ocak
+   - Sonuç: hdd=619, weatherDataMethod="official_monthly"
+   - Değer tam sayı olmalı, ondalıklı olmamalı.
+
+7. Manuel MGM sync endpointini kontrol et:
+   - POST /api/admin/weather-degree-days/sync body { year: 2026 }
+   - Bu endpoint MGM resmi yıllık gün-derece tablosundan 2026 yılını çekip weather_degree_days tablosuna upsert etmeli.
+   - Sync başarılı olduktan sonra Edremit, Van 2026 Ocak HDD 619 dönmeli.
+   - Sync başarısızsa fallback hesaplama yapılmamalı; resmi veri yok mesajı dönmeli.
+
+8. 2026 yılı import edilmediği için sistem hesaplamalı değere düşüyorsa, bunu düzelt:
+   - Eksik resmi veri = null
+   - Eksik resmi veri ≠ hesapla
+
+9. Typecheck, build ve şu testleri çalıştır:
+   - Edremit, Van 2026 Ocak resmi veri varsa HDD 619
+   - Edremit, Van 2026 Ocak resmi veri yoksa HDD null
+   - Hiçbir koşulda 637,8 veya başka ondalıklı hesaplamalı değer dönmemeli
+   - weatherDataMethod hiçbir official olmayan senaryoda calculated_daily olmamalı
