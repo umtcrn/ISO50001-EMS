@@ -17,7 +17,7 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
-  Activity, AlertTriangle, BarChart2, Building2, CloudLightning, FileText,
+  Activity, AlertTriangle, Building2, FileText,
   Gauge, Home, LayoutDashboard, Lightbulb, ShieldAlert, Target, User, LogOut, Globe, Building, Layers, Variable, TrendingUp, Zap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -31,8 +31,6 @@ const ADMIN_NAV = [
       { title: "Sayaç Yönetimi", url: "/sayaclar", icon: Gauge },
       { title: "Tüketim Verileri", url: "/tuketim", icon: Activity },
       { title: "Değişken Yönetimi", url: "/degiskenler", icon: Variable },
-      { title: "Meteoroloji", url: "/meteoroloji", icon: CloudLightning },
-      { title: "Regresyon Analizi", url: "/analiz", icon: BarChart2 },
     ],
   },
 ];
@@ -46,8 +44,6 @@ const USER_NAV = [
       { title: "Sayaç Yönetimi", url: "/sayaclar", icon: Gauge },
       { title: "Tüketim Verileri", url: "/tuketim", icon: Activity },
       { title: "Değişken Yönetimi", url: "/degiskenler", icon: Variable },
-      { title: "Meteoroloji", url: "/meteoroloji", icon: CloudLightning },
-      { title: "Regresyon Analizi", url: "/analiz", icon: BarChart2 },
     ],
   },
 ];
