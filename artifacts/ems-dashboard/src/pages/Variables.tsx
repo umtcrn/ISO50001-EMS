@@ -724,6 +724,15 @@ export default function Variables() {
         </div>
       </div>
 
+      <div className="flex items-start gap-2.5 rounded-md border border-blue-800/40 bg-blue-950/20 px-4 py-3 text-xs text-blue-300">
+        <span className="mt-0.5 shrink-0 text-blue-400">ℹ</span>
+        <span>
+          <strong className="text-blue-200">HDD ve CDD iklim verileri sistem tarafından otomatik yönetilir.</strong>{" "}
+          Tüketim verisi girilirken sayaç lokasyonuna göre MGM verisi otomatik alınır ve EnPI / regresyon analizlerinde kullanılır.
+          Bu nedenle HDD/CDD manuel değişken listesinde gösterilmez.
+        </span>
+      </div>
+
       <Tabs defaultValue="variables">
         <TabsList className="bg-muted/50">
           <TabsTrigger value="variables" className="gap-2">
