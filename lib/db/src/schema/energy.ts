@@ -535,6 +535,24 @@ export const insertWeatherDegreeDaySchema = createInsertSchema(weatherDegreeDays
 export type InsertWeatherDegreeDay = z.infer<typeof insertWeatherDegreeDaySchema>;
 export type WeatherDegreeDay = typeof weatherDegreeDaysTable.$inferSelect;
 
+// ── MGM Station Mappings (İstasyon Eşleştirme) ────────────
+export const mgmStationMappingsTable = pgTable("mgm_station_mappings", {
+  id: serial("id").primaryKey(),
+  stationKey: text("station_key").notNull().unique(),
+  stationName: text("station_name"),
+  province: text("province"),
+  district: text("district"),
+  confidence: text("confidence").default("unknown"),
+  note: text("note"),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertMgmStationMappingSchema = createInsertSchema(mgmStationMappingsTable).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertMgmStationMapping = z.infer<typeof insertMgmStationMappingSchema>;
+export type MgmStationMapping = typeof mgmStationMappingsTable.$inferSelect;
+
 // ── Energy Performance Indicators (EnPG) ──────────────────
 export const energyPerformanceIndicatorsTable = pgTable("energy_performance_indicators", {
   id: serial("id").primaryKey(),

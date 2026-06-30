@@ -1,5 +1,5 @@
-import { db, mgmStationsTable, mgmDegreeDataTable, mgmSyncLogTable, weatherDegreeDaysTable } from "@workspace/db";
-import { eq, and } from "drizzle-orm";
+import { db, mgmStationsTable, mgmDegreeDataTable, mgmSyncLogTable, weatherDegreeDaysTable, mgmStationMappingsTable } from "@workspace/db";
+import { eq, and, sql } from "drizzle-orm";
 import { MGM_STATIONS, type StationSeed } from "./mgm-stations-data.js";
 
 // ── MGM Resmi Baz Sıcaklıkları ─────────────────────────────────────
@@ -391,6 +391,38 @@ export async function lookupOfficialByStationKey(
       eq(weatherDegreeDaysTable.month as any, month),
       eq(weatherDegreeDaysTable.isOfficial, true),
       eq(weatherDegreeDaysTable.periodType, "monthly"),
+    ))
+    .limit(1);
+  return rows.length > 0 ? rows[0] : null;
+}
+
+// ── mgm_station_mappings tablosundan station_key lookup ─────────────
+export async function lookupStationKeyByLocation(
+  province: string,
+  district: string | null
+): Promise<{ stationKey: string; stationName: string | null } | null> {
+  // Önce ilçe bazlı tam eşleşme dene
+  if (district) {
+    const rows = await db
+      .select({ stationKey: mgmStationMappingsTable.stationKey, stationName: mgmStationMappingsTable.stationName })
+      .from(mgmStationMappingsTable)
+      .where(and(
+        sql`LOWER(${mgmStationMappingsTable.province}) = LOWER(${province})`,
+        sql`LOWER(${mgmStationMappingsTable.district}) = LOWER(${district})`,
+        eq(mgmStationMappingsTable.isActive, true),
+      ))
+      .limit(1);
+    if (rows.length > 0) return rows[0];
+  }
+
+  // İl merkezi (district IS NULL veya boş)
+  const rows = await db
+    .select({ stationKey: mgmStationMappingsTable.stationKey, stationName: mgmStationMappingsTable.stationName })
+    .from(mgmStationMappingsTable)
+    .where(and(
+      sql`LOWER(${mgmStationMappingsTable.province}) = LOWER(${province})`,
+      sql`(${mgmStationMappingsTable.district} IS NULL OR ${mgmStationMappingsTable.district} = '')`,
+      eq(mgmStationMappingsTable.isActive, true),
     ))
     .limit(1);
   return rows.length > 0 ? rows[0] : null;

@@ -126,6 +126,15 @@ buildAll()
     const migrationsDest = path.resolve(artifactDir, "dist/drizzle");
     await cp(migrationsSource, migrationsDest, { recursive: true });
     console.log("✓ Migrations copied to dist/drizzle");
+
+    const dataSource = path.resolve(artifactDir, "data");
+    const dataDest = path.resolve(artifactDir, "dist/data");
+    try {
+      await cp(dataSource, dataDest, { recursive: true });
+      console.log("✓ Data directory copied to dist/data");
+    } catch (_) {
+      console.log("ℹ Data directory not found, skipping copy");
+    }
   })
   .catch((err) => {
     console.error(err);

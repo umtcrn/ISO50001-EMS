@@ -2,8 +2,8 @@ import { Router } from "express";
 import { db, consumptionTable, metersTable, subUnitsTable, energyUseGroupsTable } from "@workspace/db";
 import { eq, and, ne, sql } from "drizzle-orm";
 import { requireAuth } from "../middlewares/auth.js";
-import { findStationByIlIlce, parseIlIlce } from "../services/mgm-stations-data.js";
-import { toStationKey, lookupOfficialByStationKey, lookupOfficialWeatherDegreeDay } from "../services/mgm-sync.js";
+import { parseIlIlce } from "../services/mgm-stations-data.js";
+import { toStationKey, lookupOfficialByStationKey, lookupOfficialWeatherDegreeDay, lookupStationKeyByLocation } from "../services/mgm-sync.js";
 
 const router = Router();
 
@@ -20,7 +20,42 @@ async function autoLookupHddCdd(location: string, year: number, month: number): 
   try {
     const { il, ilce } = parseIlIlce(location);
 
-    // 1. İlçe varsa → ilçe bazlı station_key ile ara
+    // 1. mgm_station_mappings: ilçe bazlı eşleşme
+    if (ilce) {
+      const mapping = await lookupStationKeyByLocation(il, ilce);
+      if (mapping) {
+        const data = await lookupOfficialByStationKey(mapping.stationKey, year, month);
+        if (data) {
+          return {
+            hdd: data.hdd,
+            cdd: data.cdd,
+            stationName: mapping.stationName ?? data.stationName ?? ilce,
+            stationNote: data.stationNote ?? null,
+            dataMethod: "official_monthly",
+          };
+        }
+      }
+    }
+
+    // 2. mgm_station_mappings: il merkezi eşleşmesi
+    const mappingByIl = await lookupStationKeyByLocation(il, null);
+    if (mappingByIl) {
+      const data = await lookupOfficialByStationKey(mappingByIl.stationKey, year, month);
+      if (data) {
+        const note = ilce
+          ? `"${ilce}" için özel MGM istasyonu resmi verisi bulunamadı. ${il} ili merkezi resmi verisi kullanıldı.`
+          : null;
+        return {
+          hdd: data.hdd,
+          cdd: data.cdd,
+          stationName: mappingByIl.stationName ?? data.stationName ?? il,
+          stationNote: data.stationNote ?? note,
+          dataMethod: "official_monthly",
+        };
+      }
+    }
+
+    // 3. station_key slug fallback (eski kayıtlar / Van 2024 demo verisi)
     if (ilce) {
       const sk = toStationKey(il, ilce);
       const official = await lookupOfficialByStationKey(sk, year, month);
@@ -35,7 +70,6 @@ async function autoLookupHddCdd(location: string, year: number, month: number): 
       }
     }
 
-    // 2. İl merkezi station_key ile ara
     const ilKey = toStationKey(il, null);
     const officialByIl = await lookupOfficialByStationKey(ilKey, year, month);
     if (officialByIl) {
@@ -51,7 +85,7 @@ async function autoLookupHddCdd(location: string, year: number, month: number): 
       };
     }
 
-    // 3. Province text match (eski kayıtlar için geriye uyum)
+    // 4. Province text match (eski kayıtlar için geriye uyum)
     const officialByProv = await lookupOfficialWeatherDegreeDay(il, year, month);
     if (officialByProv) {
       const note = ilce

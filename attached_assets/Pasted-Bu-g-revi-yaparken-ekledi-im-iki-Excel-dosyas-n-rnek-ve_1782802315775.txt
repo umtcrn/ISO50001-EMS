@@ -1,0 +1,114 @@
+Bu görevi yaparken eklediğim iki Excel dosyasını örnek ve ilk import kaynağı olarak kullan:
+
+1. mgm_station_mapping_checked.xlsx
+2. mgm_degree_days_last_10_years_final.xlsx
+
+Bu dosyaların kolonlarını okuyup import endpointlerini ve import scriptlerini bu gerçek dosya formatına göre yaz.
+
+mgm_degree_days_to_excel_colab_mapping.py dosyasını sadece referans olarak incele. Bu script uygulama içinde runtime’da çalıştırılmayacak. Sadece Excel’in nasıl üretildiğini anlamak için kullanılabilir.
+
+Excel dosyalarını repo içinde artifacts/api-server/data/mgm-import/ klasörüne koy. İlk import için script de oluştur:
+
+pnpm --filter @workspace/scripts run import:mgm-excel
+
+Bu script önce mapping Excel’i, sonra degree days Excel’i import etsin.
+
+Lütfen önce dosyaların sheet adlarını ve kolonlarını okuyup bana kısa doğrulama yap. Kolonlar uyuyorsa kodlamaya geç.
+
+
+Projede MGM HDD/CDD veri akışını artık güvenilir Excel import + manuel MGM sync yapısına geçirmek istiyorum.
+Mevcut durum:
+•	Colab’da mgm_station_mapping_checked.xlsx ve mgm_degree_days_to_excel_colab_mapping.py kullanılarak mgm_degree_days_last_10_years_final.xlsx üretildi.
+•	Bu Excel’de son 10 yıla ait resmi MGM Gün-Derece verileri tek tablo formatında var.
+•	HDD/CDD değerleri hesaplanmış değil, MGM tablosundan okunmuş resmi değerlerdir.
+•	province/district bilgileri mgm_station_mapping_checked.xlsx mapping dosyasından geliyor.
+İstenen iş:
+1.	mgm_station_mapping_checked.xlsx import sistemi oluştur.
+o	Bu dosyadan MGM istasyon eşleştirme tablosu oluşturulsun veya mevcut tablo güncellensin.
+o	Önerilen tablo: mgm_station_mappings
+o	Alanlar:
+	station_key
+	station_name
+	province
+	district
+	confidence
+	note
+	is_active
+	created_at
+	updated_at
+o	station_key unique olmalı.
+o	Import upsert çalışmalı; aynı station_key varsa güncellemeli.
+2.	mgm_degree_days_last_10_years_final.xlsx import sistemi oluştur.
+o	Excel kolonları:
+	station_key
+	station_name
+	province
+	district
+	year
+	month
+	hdd
+	cdd
+	hdd_days
+	cdd_days
+	annual_hdd
+	annual_cdd
+	source
+	source_url
+	is_official
+	mapping_confidence
+	mapping_note
+o	Bu dosya weather_degree_days tablosuna import edilsin.
+o	Unique kural:
+	station_key + year + month unique olmalı.
+o	Import upsert çalışmalı:
+	aynı kayıt varsa güncelle
+	yoksa ekle
+	hatalı satırları raporla
+o	Import sonunda şu özet dönsün:
+	inserted
+	updated
+	skipped
+	failed
+	totalRows
+	uniqueStations
+	years
+3.	Admin/superadmin endpointleri oluştur:
+o	POST /api/admin/mgm/station-mapping/import-excel
+o	POST /api/admin/weather-degree-days/import-excel
+o	POST /api/admin/weather-degree-days/sync
+4.	Manuel MGM sync endpointi:
+o	POST /api/admin/weather-degree-days/sync
+o	body: { year?: number }
+o	year verilirse sadece o yılı MGM’den çekip DB’ye upsert etsin.
+o	year verilmezse mevcut yılı çeksin.
+o	Bu işlem Excel dosyasını güncellemesin; doğrudan weather_degree_days tablosunu upsert etsin.
+o	Cron şimdilik yapılmasın.
+5.	Kullanıcı tüketim girerken:
+o	Sayaç lokasyonundaki province/district esas alınsın.
+o	Sistem mgm_station_mappings tablosundan en uygun station_key’i bulsun.
+o	Sonra weather_degree_days tablosunda station_key + year + month ile resmi MGM verisini arasın.
+o	Bulursa hdd/cdd değerini getirsin.
+o	Bulamazsa hdd/cdd null kalsın ve kullanıcıya resmi MGM verisi bulunamadı mesajı gösterilsin.
+6.	Fallback davranışları kapatılsın:
+o	Open-Meteo fallback yok
+o	günlük hesaplamalı HDD/CDD yok
+o	nearest station fallback yok
+o	Nevşehir/default station fallback yok
+o	ondalıklı hesaplanan değerler consumption.hdd/cdd alanına yazılmasın
+7.	Örnek davranış:
+o	Van / Merkez / 2024 Ocak → station_key van → HDD 528
+o	Van / Merkez / 2024 Şubat → station_key van → HDD 498
+o	Van / Edremit için mapping dosyasında hangi station_key tanımlıysa o kullanılsın.
+o	Mapping yoksa sistem kafasına göre Nevşehir veya başka istasyona düşmesin.
+o	Resmi veri yoksa HDD/CDD null olsun.
+8.	Tüketim ekranında veri kaynağı gösterilsin:
+o	Kaynak: MGM Resmi Gün-Derece
+o	İstasyon: station_name
+o	Yöntem: official_monthly
+o	Eğer veri yoksa: “Bu lokasyon ve dönem için resmi MGM HDD/CDD verisi bulunamadı.”
+9.	Mevcut hatalı kayıtları düzeltmek için refresh endpoint de aynı kurala uysun:
+o	resmi MGM verisi varsa güncelle
+o	resmi veri yoksa hdd/cdd null yap
+o	fallback değer yazma
+10.	Typecheck ve build çalıştır.
+

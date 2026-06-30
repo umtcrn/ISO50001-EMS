@@ -99,6 +99,13 @@
       "when": 1783100000000,
       "tag": "0014_mgm_official_pool",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1783200000000,
+      "tag": "0015_mgm_station_mappings",
+      "breakpoints": true
     }
   ]
 }

@@ -10,11 +10,13 @@
     "export:internal": "tsx ./src/export-internal.ts",
     "import:internal": "tsx ./src/import-internal.ts",
     "sync:mgm-degree-days": "tsx ./src/sync-mgm-degree-days.ts",
+    "import:mgm-excel": "tsx ./src/import-mgm-excel.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
     "@workspace/db": "workspace:*",
     "drizzle-orm": "catalog:",
+    "exceljs": "^4.4.0",
     "pg": "^8.20.0"
   },
   "devDependencies": {

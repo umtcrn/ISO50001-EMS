@@ -1,10 +1,11 @@
 import { Router } from "express";
-import { db, mgmStationsTable, mgmDegreeDataTable, mgmSyncLogTable, weatherDegreeDaysTable } from "@workspace/db";
-import { desc, eq, and } from "drizzle-orm";
+import { db, mgmStationsTable, mgmDegreeDataTable, mgmSyncLogTable, weatherDegreeDaysTable, mgmStationMappingsTable } from "@workspace/db";
+import { desc, eq, and, sql } from "drizzle-orm";
 import { requireAuth, requireAdmin } from "../middlewares/auth.js";
 import { syncCurrentMonthData, lookupDegreeData, lookupOfficialWeatherDegreeDay, lookupOfficialByStationKey, toStationKey } from "../services/mgm-sync.js";
 import { MGM_STATIONS, findStationByCity, findStationByIlIlce, parseIlIlce, findNearestStation, haversineDistance } from "../services/mgm-stations-data.js";
 import { syncOfficialDegreeDays } from "../services/mgm-official-sync.js";
+import { importStationMapping, importDegreeDays, DEFAULT_MAPPING_FILE, DEFAULT_DEGREE_DAYS_FILE } from "../services/mgm-excel-import.js";
 
 const router = Router();
 
@@ -293,6 +294,80 @@ router.get("/mgm/degree-data", requireAuth, async (req, res) => {
 
     const filtered = year ? rows.filter(r => r.year === parseInt(year as string)) : rows;
     res.json(filtered);
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Sunucu hatası" });
+  }
+});
+
+// POST /api/admin/mgm/station-mapping/import-excel
+// Repo içindeki mgm_station_mapping_checked.xlsx dosyasını mgm_station_mappings tablosuna import eder
+router.post("/admin/mgm/station-mapping/import-excel", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const filePath = req.body?.filePath ?? DEFAULT_MAPPING_FILE;
+    const logs: string[] = [];
+    const onProgress = (msg: string) => {
+      logs.push(msg);
+      req.log.info(msg);
+    };
+
+    const result = await importStationMapping(filePath, onProgress);
+    res.json({
+      message: "MGM istasyon eşleştirme import tamamlandı",
+      filePath,
+      ...result,
+      logs,
+    });
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: `Import hatası: ${String(err)}` });
+  }
+});
+
+// POST /api/admin/weather-degree-days/import-excel
+// Repo içindeki mgm_degree_days_last_10_years_final.xlsx dosyasını weather_degree_days tablosuna import eder
+router.post("/admin/weather-degree-days/import-excel", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const filePath = req.body?.filePath ?? DEFAULT_DEGREE_DAYS_FILE;
+    const logs: string[] = [];
+    const onProgress = (msg: string) => {
+      logs.push(msg);
+      req.log.info(msg);
+    };
+
+    const result = await importDegreeDays(filePath, onProgress);
+    res.json({
+      message: "MGM gün derece import tamamlandı",
+      filePath,
+      ...result,
+      logs,
+    });
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: `Import hatası: ${String(err)}` });
+  }
+});
+
+// GET /api/admin/mgm/station-mappings — İstasyon eşleştirme listesi (admin)
+router.get("/admin/mgm/station-mappings", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { province, search } = req.query;
+    let rows = await db.select().from(mgmStationMappingsTable)
+      .orderBy(mgmStationMappingsTable.province, mgmStationMappingsTable.district);
+
+    if (province) {
+      rows = rows.filter(r => r.province?.toLowerCase().includes((province as string).toLowerCase()));
+    }
+    if (search) {
+      const q = (search as string).toLowerCase();
+      rows = rows.filter(r =>
+        r.stationKey.toLowerCase().includes(q) ||
+        r.stationName?.toLowerCase().includes(q) ||
+        r.province?.toLowerCase().includes(q) ||
+        r.district?.toLowerCase().includes(q)
+      );
+    }
+    res.json(rows);
   } catch (err) {
     req.log.error(err);
     res.status(500).json({ error: "Sunucu hatası" });
