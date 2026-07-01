@@ -10,6 +10,7 @@
     "export:internal": "tsx ./src/export-internal.ts",
     "import:internal": "tsx ./src/import-internal.ts",
     "sync:mgm-degree-days": "tsx ./src/sync-mgm-degree-days.ts",
+    "import:mgm": "tsx ./src/import-mgm.ts",
     "import:mgm-excel": "tsx ./src/import-mgm-excel.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },

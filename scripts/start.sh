@@ -21,8 +21,14 @@ echo "[start] Starting API server on port 8080..."
 PORT=8080 node --enable-source-maps artifacts/api-server/dist/index.mjs &
 API_PID=$!
 
-# Wait for API server to be ready
+# Wait for API server to be ready (migrations run during this window)
 sleep 3
+
+# Bootstrap MGM reference data (idempotent — skips if already imported)
+# This is system reference data, NOT demo/internal data.
+# Runs automatically so every fresh Replit environment has MGM data ready.
+echo "[start] Bootstrapping MGM reference data..."
+pnpm --filter @workspace/scripts run import:mgm || echo "[start] MGM bootstrap warning (non-fatal, continuing)"
 
 # Start Vite dev server on port 5000
 echo "[start] Starting frontend dev server on port 5000..."
