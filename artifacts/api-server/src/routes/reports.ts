@@ -1,6 +1,6 @@
 import { Router } from "express";
-import { db, reportsTable, consumptionTable, swotTable, risksTable, seuTable, metersTable, weatherTable, energyTargetsTable, energyActionPlansTable, energyTargetProgressTable, vapProjectsTable, unitsTable, subUnitsTable, energySourcesTable } from "@workspace/db";
-import { eq, and, SQL, inArray, lte, gte, desc } from "drizzle-orm";
+import { db, reportsTable, consumptionTable, swotTable, risksTable, seuTable, metersTable, weatherTable, energyTargetsTable, energyActionPlansTable, energyTargetProgressTable, vapProjectsTable, unitsTable, subUnitsTable, energySourcesTable, energyBaselinesTable, energyBaselineVariablesTable, energyPerformanceResultsTable, seuAssessmentItemsTable, seuAssessmentsTable } from "@workspace/db";
+import { eq, and, SQL, inArray, lte, gte, desc, asc } from "drizzle-orm";
 import { requireAuth } from "../middlewares/auth.js";
 
 const router = Router();
@@ -576,6 +576,311 @@ router.get("/reports/energy-targets/pdf", requireAuth, async (req, res) => {
   } catch (err) {
     req.log.error(err);
     res.status(500).json({ error: "Rapor üretme hatası" });
+  }
+});
+
+// ── GET /api/reports/energy-performance/pdf ───────────────────────────────
+// EnPG İzleme PDF raporu — ham birimli (m³, kWh vb.), TEP değil
+// Not: consumptionTable.kwh kolonu teknik ad olmakla birlikte gerçekte
+// ham tüketim değerini (rawConsumption) temsil eder. Yeni kodlarda
+// rawConsumption alias'ı tercih edilmelidir.
+router.get("/reports/energy-performance/pdf", requireAuth, async (req, res) => {
+  try {
+    const { role, companyId: sessionCompanyId, unitId: sessionUnitId } = req.user!;
+
+    const baselineId = req.query.baselineId ? parseInt(req.query.baselineId as string) : NaN;
+    const year = req.query.year ? parseInt(req.query.year as string) : new Date().getFullYear();
+
+    if (isNaN(baselineId)) {
+      res.status(400).json({ error: "baselineId zorunludur" });
+      return;
+    }
+
+    // ── Baseline + değişkenler ────────────────────────────────────────────
+    const [baseline] = await db
+      .select({
+        id: energyBaselinesTable.id,
+        baselineYear: energyBaselinesTable.baselineYear,
+        periodStart: energyBaselinesTable.periodStart,
+        periodEnd: energyBaselinesTable.periodEnd,
+        modelType: energyBaselinesTable.modelType,
+        intercept: energyBaselinesTable.intercept,
+        rSquared: energyBaselinesTable.rSquared,
+        adjustedRSquared: energyBaselinesTable.adjustedRSquared,
+        sampleSize: energyBaselinesTable.sampleSize,
+        formulaText: energyBaselinesTable.formulaText,
+        isValid: energyBaselinesTable.isValid,
+        status: energyBaselinesTable.status,
+        // dependentVariableUnit: enerji kaynağının ham birimi (m³, kWh, vb.)
+        // kwh kolonu rawConsumption anlamına gelir — baseline bu birimi saklar
+        rawUnit: energyBaselinesTable.dependentVariableUnit,
+        companyId: energyBaselinesTable.companyId,
+        unitId: energyBaselinesTable.unitId,
+        seuAssessmentItemId: energyBaselinesTable.seuAssessmentItemId,
+      })
+      .from(energyBaselinesTable)
+      .where(eq(energyBaselinesTable.id, baselineId));
+
+    if (!baseline) {
+      res.status(404).json({ error: "EnRÇ bulunamadı" });
+      return;
+    }
+
+    // Tenant kontrolü
+    if (baseline.companyId !== sessionCompanyId) {
+      res.status(403).json({ error: "Erişim yetkisi yok" });
+      return;
+    }
+    if (role === "user" && sessionUnitId && baseline.unitId !== sessionUnitId) {
+      res.status(403).json({ error: "Erişim yetkisi yok" });
+      return;
+    }
+
+    const bvars = await db
+      .select()
+      .from(energyBaselineVariablesTable)
+      .where(eq(energyBaselineVariablesTable.baselineId, baselineId))
+      .orderBy(asc(energyBaselineVariablesTable.id));
+
+    // ── SEU kalemi + birim bilgisi ────────────────────────────────────────
+    let seuItemName = "—";
+    let unitName = "—";
+    let energySourceName = "—";
+
+    if (baseline.seuAssessmentItemId) {
+      const [seuRow] = await db
+        .select({
+          itemName: seuAssessmentItemsTable.name,
+          unitName: unitsTable.name,
+          energySourceName: energySourcesTable.name,
+        })
+        .from(seuAssessmentItemsTable)
+        .innerJoin(seuAssessmentsTable, eq(seuAssessmentItemsTable.assessmentId, seuAssessmentsTable.id))
+        .leftJoin(unitsTable, eq(seuAssessmentsTable.unitId, unitsTable.id))
+        .leftJoin(energySourcesTable, eq(seuAssessmentItemsTable.energySourceId, energySourcesTable.id))
+        .where(eq(seuAssessmentItemsTable.id, baseline.seuAssessmentItemId));
+
+      if (seuRow) {
+        seuItemName = seuRow.itemName ?? "—";
+        unitName = seuRow.unitName ?? "—";
+        energySourceName = seuRow.energySourceName ?? "—";
+      }
+    }
+
+    // ── EnPG sonuçları ────────────────────────────────────────────────────
+    // actualConsumption ve expectedConsumption rawConsumption (ham birim) cinsinden saklanır
+    const results = await db
+      .select()
+      .from(energyPerformanceResultsTable)
+      .where(and(
+        eq(energyPerformanceResultsTable.baselineId, baselineId),
+        eq(energyPerformanceResultsTable.year, year),
+        eq(energyPerformanceResultsTable.companyId, sessionCompanyId),
+      ))
+      .orderBy(asc(energyPerformanceResultsTable.month));
+
+    // ── Ham birim etiketi ─────────────────────────────────────────────────
+    // rawUnit: consumptionTable.kwh alanının gerçek birimi — TEP değil, m³/kWh/vb.
+    const rawUnit = baseline.rawUnit ?? "ham tüketim";
+
+    // ── KPI özet ─────────────────────────────────────────────────────────
+    const totalActual = results.reduce((s, r) => s + (r.actualConsumption ?? 0), 0);
+    const totalExpected = results.reduce((s, r) => s + (r.expectedConsumption ?? 0), 0);
+    const totalDiff = totalActual - totalExpected;
+    const finalCusum = results.length > 0 ? (results[results.length - 1]?.cusum ?? 0) : 0;
+    // Ortalama EEI sadece expected > 0 olan aylar için (negative_expected hariç)
+    const eeiRows = results.filter(r => r.eei != null && r.status !== "negative_expected");
+    const avgEei = eeiRows.length > 0 ? eeiRows.reduce((s, r) => s + r.eei!, 0) / eeiRows.length : null;
+
+    const fmtRaw = (v: number | null | undefined, dec = 2) =>
+      v != null ? v.toLocaleString("tr-TR", { minimumFractionDigits: dec, maximumFractionDigits: dec }) : "—";
+    const fmtPct = (actual: number | null, expected: number | null) => {
+      if (actual == null || expected == null || expected <= 0) return "—";
+      const pct = ((actual - expected) / expected) * 100;
+      return (pct >= 0 ? "+" : "") + pct.toFixed(1) + "%";
+    };
+
+    // ── Model tipi etiketi ────────────────────────────────────────────────
+    const modelLabel = baseline.modelType === "single_regression" ? "Tekli Regresyon" : "Çoklu Regresyon";
+
+    // ── Durum etiketi ─────────────────────────────────────────────────────
+    const statusLabel = (s: string | null) => {
+      if (s === "improvement") return '<span style="color:#059669;font-weight:600">✓ İyileşme</span>';
+      if (s === "deterioration") return '<span style="color:#dc2626;font-weight:600">✗ Kötüleşme</span>';
+      if (s === "negative_expected") return '<span style="color:#d97706" title="Regresyon formülü bu ay için sıfır veya negatif beklenen tüketim üretmiştir. EEI hesaplanmaz.">⚠ Beklenen ≤ 0</span>';
+      return "—";
+    };
+
+    // ── Aylık tablo satırları ─────────────────────────────────────────────
+    const tableRowsHtml = results.map(r => {
+      const sapmaRaw = r.difference != null ? fmtRaw(r.difference) : "—";
+      const sapmaPct = fmtPct(r.actualConsumption, r.expectedConsumption);
+      const rowBg = r.status === "improvement" ? "background:#f0fdf4"
+        : r.status === "deterioration" ? "background:#fef2f2"
+        : r.status === "negative_expected" ? "background:#fffbeb"
+        : "";
+      return `<tr style="${rowBg}">
+        <td>${MONTH_NAMES[r.month] ?? r.month}</td>
+        <td style="text-align:right">${fmtRaw(r.actualConsumption)}</td>
+        <td style="text-align:right">${r.status === "negative_expected"
+          ? `<span style="color:#d97706">${fmtRaw(r.expectedConsumption)}</span>`
+          : fmtRaw(r.expectedConsumption)}</td>
+        <td style="text-align:right;${r.difference != null && r.difference < 0 ? "color:#059669" : r.difference != null && r.difference > 0 ? "color:#dc2626" : ""}">${sapmaRaw}</td>
+        <td style="text-align:right">${sapmaPct}</td>
+        <td style="text-align:right">${fmtRaw(r.cusum)}</td>
+        <td style="text-align:right">${r.eei != null ? r.eei.toFixed(4) : "—"}</td>
+        <td style="text-align:center">${statusLabel(r.status)}</td>
+      </tr>`;
+    }).join("\n");
+
+    // ── Toplam / özet satırı ──────────────────────────────────────────────
+    const diffPct = totalExpected > 0
+      ? ((totalDiff / totalExpected) * 100).toFixed(1)
+      : null;
+    const totalRowHtml = `<tr style="font-weight:700;background:#f1f5f9;border-top:2px solid #cbd5e1">
+      <td>TOPLAM / ORT.</td>
+      <td style="text-align:right">${fmtRaw(totalActual)}</td>
+      <td style="text-align:right">${fmtRaw(totalExpected)}</td>
+      <td style="text-align:right;${totalDiff < 0 ? "color:#059669" : totalDiff > 0 ? "color:#dc2626" : ""}">${fmtRaw(totalDiff)}</td>
+      <td style="text-align:right">${diffPct != null ? (parseFloat(diffPct) >= 0 ? "+" : "") + diffPct + "%" : "—"}</td>
+      <td style="text-align:right">${fmtRaw(finalCusum)}</td>
+      <td style="text-align:right">${avgEei != null ? avgEei.toFixed(4) : "—"}</td>
+      <td style="text-align:center">—</td>
+    </tr>`;
+
+    // ── Değişkenler tablosu ───────────────────────────────────────────────
+    const varsHtml = bvars.length > 0
+      ? `<table>
+          <tr><th>Değişken</th><th>Katsayı</th><th>Std. Hata</th><th>t İstatistiği</th><th>p Değeri</th><th>Anlamlı?</th></tr>
+          ${bvars.map(v => `<tr>
+            <td>${v.variableName}</td>
+            <td style="text-align:right">${v.coefficient?.toFixed(6) ?? "—"}</td>
+            <td style="text-align:right">${v.standardError?.toFixed(6) ?? "—"}</td>
+            <td style="text-align:right">${v.tStat?.toFixed(4) ?? "—"}</td>
+            <td style="text-align:right">${v.pValue?.toFixed(4) ?? "—"}</td>
+            <td style="text-align:center">${v.isSignificant ? "✓ Evet" : "✗ Hayır"}</td>
+          </tr>`).join("")}
+        </table>`
+      : "";
+
+    // ── Negatif beklenen aylar notu ───────────────────────────────────────
+    const negativeMonths = results.filter(r => r.status === "negative_expected");
+    const negativeNoteHtml = negativeMonths.length > 0
+      ? `<div style="margin:16px 0;padding:10px 14px;background:#fffbeb;border-left:4px solid #f59e0b;border-radius:4px;font-size:12px;color:#78350f">
+          <strong>Not:</strong> ${negativeMonths.map(r => MONTH_NAMES[r.month]).join(", ")} aylarında regresyon formülü sıfır veya negatif beklenen tüketim üretmiştir.
+          Bu aylar EEI ve ortalama EEI hesabına dahil edilmemiştir. Durum sütununda "Beklenen ≤ 0" olarak işaretlenmiştir.
+        </div>`
+      : "";
+
+    // ── Tam HTML ──────────────────────────────────────────────────────────
+    const htmlContent = `<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <title>EnPG İzleme Raporu — ${seuItemName} — ${year}</title>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 1050px; margin: 0 auto; padding: 40px; color: #1a202c; }
+    h1 { color: #0f766e; border-bottom: 3px solid #0f766e; padding-bottom: 10px; font-size: 20px; }
+    h2 { color: #1e3a5f; margin-top: 28px; font-size: 15px; }
+    table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13px; }
+    th, td { border: 1px solid #e2e8f0; padding: 7px 10px; vertical-align: top; }
+    th { background: #f1f5f9; font-weight: 600; color: #1e3a5f; }
+    .kpi-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin: 16px 0; }
+    .kpi-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; text-align: center; }
+    .kpi-value { font-size: 22px; font-weight: 700; color: #0f766e; }
+    .kpi-label { font-size: 11px; color: #64748b; margin-top: 3px; }
+    .formula-box { background: #f0fdf4; border: 1px solid #a7f3d0; border-radius: 6px; padding: 12px 16px; margin: 12px 0; font-family: monospace; font-size: 13px; color: #065f46; }
+    .meta-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 12px 0; font-size: 12px; }
+    .meta-item { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 10px 12px; }
+    .meta-label { color: #64748b; margin-bottom: 3px; }
+    .meta-value { font-weight: 600; color: #1e3a5f; }
+    .footer { margin-top: 36px; border-top: 1px solid #e2e8f0; padding-top: 14px; color: #94a3b8; font-size: 11px; }
+    @media print { body { padding: 20px; } }
+  </style>
+</head>
+<body>
+
+  <h1>ISO 50001 — EnPG İzleme Raporu</h1>
+  <div class="meta-grid">
+    <div class="meta-item"><div class="meta-label">ÖEK Kalemi</div><div class="meta-value">${seuItemName}</div></div>
+    <div class="meta-item"><div class="meta-label">Enerji Kaynağı</div><div class="meta-value">${energySourceName}</div></div>
+    <div class="meta-item"><div class="meta-label">Birim</div><div class="meta-value">${unitName}</div></div>
+    <div class="meta-item"><div class="meta-label">İzleme Yılı</div><div class="meta-value">${year}</div></div>
+    <div class="meta-item"><div class="meta-label">Referans Yılı (EnRÇ)</div><div class="meta-value">${baseline.baselineYear}</div></div>
+    <div class="meta-item"><div class="meta-label">Rapor Tarihi</div><div class="meta-value">${new Date().toLocaleDateString("tr-TR", { day: "2-digit", month: "long", year: "numeric" })}</div></div>
+  </div>
+
+  <h2>Regresyon Modeli (EnRÇ Formülü)</h2>
+  <div class="formula-box">${baseline.formulaText ?? "Formül kaydedilmemiş"}</div>
+  <div class="meta-grid">
+    <div class="meta-item"><div class="meta-label">Model Türü</div><div class="meta-value">${modelLabel}</div></div>
+    <div class="meta-item"><div class="meta-label">R²</div><div class="meta-value">${baseline.rSquared?.toFixed(4) ?? "—"}</div></div>
+    <div class="meta-item"><div class="meta-label">Ayarlı R²</div><div class="meta-value">${baseline.adjustedRSquared?.toFixed(4) ?? "—"}</div></div>
+    <div class="meta-item"><div class="meta-label">Örnek Sayısı</div><div class="meta-value">${baseline.sampleSize ?? "—"} ay</div></div>
+    <div class="meta-item"><div class="meta-label">Referans Dönemi</div><div class="meta-value">${baseline.periodStart} / ${baseline.periodEnd}</div></div>
+    <div class="meta-item"><div class="meta-label">Bağımlı Değişken Birimi</div><div class="meta-value">${rawUnit}</div></div>
+  </div>
+
+  ${varsHtml ? `<h2>Model Değişkenleri</h2>${varsHtml}` : ""}
+
+  <h2>Performans Özeti (${year})</h2>
+  <div class="kpi-grid">
+    <div class="kpi-box">
+      <div class="kpi-value">${fmtRaw(totalActual, 0)}</div>
+      <div class="kpi-label">Toplam Gerçekleşen (${rawUnit})</div>
+    </div>
+    <div class="kpi-box">
+      <div class="kpi-value">${fmtRaw(totalExpected, 0)}</div>
+      <div class="kpi-label">Toplam Beklenen (${rawUnit})</div>
+    </div>
+    <div class="kpi-box">
+      <div class="kpi-value" style="color:${totalDiff < 0 ? "#059669" : "#dc2626"}">${(totalDiff >= 0 ? "+" : "") + fmtRaw(totalDiff, 0)}</div>
+      <div class="kpi-label">Net Sapma (${rawUnit})</div>
+    </div>
+    <div class="kpi-box">
+      <div class="kpi-value" style="color:${finalCusum < 0 ? "#059669" : "#dc2626"}">${fmtRaw(finalCusum)}</div>
+      <div class="kpi-label">CUSUM Son Değer (${rawUnit})</div>
+    </div>
+    <div class="kpi-box">
+      <div class="kpi-value" style="color:${avgEei != null && avgEei < 1 ? "#059669" : "#dc2626"}">${avgEei != null ? avgEei.toFixed(4) : "—"}</div>
+      <div class="kpi-label">Ortalama EEI${negativeMonths.length > 0 ? " *" : ""}</div>
+    </div>
+  </div>
+
+  ${negativeNoteHtml}
+
+  <h2>Aylık EnPG Sonuçları (${year})</h2>
+  ${results.length > 0 ? `
+  <table>
+    <tr>
+      <th>Ay</th>
+      <th style="text-align:right">Gerçekleşen (${rawUnit})</th>
+      <th style="text-align:right">Beklenen (${rawUnit})</th>
+      <th style="text-align:right">Sapma (${rawUnit})</th>
+      <th style="text-align:right">Sapma (%)</th>
+      <th style="text-align:right">CUSUM (${rawUnit})</th>
+      <th style="text-align:right">EEI</th>
+      <th style="text-align:center">Durum</th>
+    </tr>
+    ${tableRowsHtml}
+    ${totalRowHtml}
+  </table>` : "<p>Bu yıl için hesaplanmış EnPG sonucu bulunamadı. Önce EnPG İzleme ekranından hesaplama yapın.</p>"}
+
+  <div class="footer">
+    Bu rapor ISO 50001 Enerji Yönetim Sistemi kapsamında otomatik olarak üretilmiştir.<br>
+    Bağımlı değişken birimi: <strong>${rawUnit}</strong> — TEP dönüşümü bu raporda ana metrik olarak kullanılmamıştır.<br>
+    Referans EnRÇ ID: ${baselineId} | İzleme Yılı: ${year} | Üretim: ${new Date().toLocaleString("tr-TR")}
+  </div>
+</body>
+</html>`;
+
+    const b64 = Buffer.from(htmlContent).toString("base64");
+    const dataUrl = `data:text/html;base64,${b64}`;
+
+    res.json({ dataUrl, year, baselineId, seuItemName, rawUnit });
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "EnPG PDF raporu üretme hatası" });
   }
 });
 

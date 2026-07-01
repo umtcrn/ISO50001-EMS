@@ -19,7 +19,7 @@ import { useYear } from "@/context/YearContext";
 import { useListUnits, getListUnitsQueryKey } from "@workspace/api-client-react";
 import {
   AlertCircle, AlertTriangle, CheckCircle2, ChevronRight, BarChart2, Database,
-  TrendingUp, Activity, Info, Save, Clock, Archive, FileCheck, RefreshCw,
+  TrendingUp, Activity, Info, Save, Clock, Archive, FileCheck, RefreshCw, FileDown,
 } from "lucide-react";
 import {
   ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -245,6 +245,7 @@ export default function EnergyPerformance() {
     id: number; month: number; actualConsumption: number | null; expectedConsumption: number | null;
     difference: number | null; cusum: number | null; eei: number | null; setValue: number | null; status: string | null;
   }>>([]);
+  const [pdfLoading, setPdfLoading] = useState(false);
 
   const { data: units } = useListUnits(
     {} as any,
@@ -330,6 +331,37 @@ export default function EnergyPerformance() {
       if (Array.isArray(resp)) setMonitorResults(resp);
     } catch {
       // sessiz hata — tablo boş göster
+    }
+  }
+
+  // EnPG İzleme PDF raporu — ham birimli (m³, kWh), TEP değil
+  async function downloadEnpgPdf() {
+    if (!monitorBaselineId) return;
+    setPdfLoading(true);
+    try {
+      const params = new URLSearchParams({
+        baselineId: String(monitorBaselineId),
+        year: String(monitorYear),
+      });
+      const res = await fetch(`${API_BASE}/reports/energy-performance/pdf?${params}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error((err as any)?.error ?? "PDF üretme hatası");
+      }
+      const data = await res.json();
+      if (!data.dataUrl) throw new Error("dataUrl eksik");
+      const a = document.createElement("a");
+      a.href = data.dataUrl;
+      a.download = `enpg-izleme-raporu-${data.seuItemName ?? "rapor"}-${monitorYear}.html`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    } catch (e: any) {
+      alert(e?.message ?? "PDF indirme başarısız");
+    } finally {
+      setPdfLoading(false);
     }
   }
 
@@ -1484,6 +1516,17 @@ export default function EnergyPerformance() {
                         onClick={loadMonitorResults}
                       >
                         <RefreshCw className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        variant="outline" size="sm" className="h-8 text-xs gap-1"
+                        disabled={!monitorBaselineId || pdfLoading || monitorResults.length === 0}
+                        title="EnPG İzleme raporunu HTML olarak indir (tarayıcıda PDF'e dönüştürülebilir)"
+                        onClick={downloadEnpgPdf}
+                      >
+                        {pdfLoading
+                          ? <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                          : <FileDown className="h-3.5 w-3.5" />}
+                        <span>PDF</span>
                       </Button>
                     </div>
                   </div>

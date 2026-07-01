@@ -135,6 +135,10 @@ export const consumptionTable = pgTable("consumption", {
   meterId: integer("meter_id").references(() => metersTable.id, { onDelete: "cascade" }).notNull(),
   year: integer("year").notNull(),
   month: integer("month").notNull(),
+  // "kwh" teknik kolon adıdır; gerçekte ham tüketim değerini (rawConsumption) saklar.
+  // Birim enerji kaynağına göre değişir: elektrik → kWh, doğalgaz → m³, vb.
+  // TEP dönüşümü için ayrıca "tep" kolonu vardır.
+  // Yeni kodlarda select alias olarak rawConsumption kullanılması önerilir.
   kwh: real("kwh").notNull().default(0),
   tep: real("tep").notNull().default(0),
   co2: real("co2").notNull().default(0),
