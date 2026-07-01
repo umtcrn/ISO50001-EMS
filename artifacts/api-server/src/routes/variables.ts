@@ -387,6 +387,165 @@ router.delete("/variable-values/:id", requireAuth, async (req, res) => {
   }
 });
 
+// POST /api/variable-values/batch — toplu içe aktarma
+router.post("/variable-values/batch", requireAuth, async (req, res) => {
+  try {
+    const { role, companyId: sessionCompanyId, unitId: sessionUnitId } = req.user!;
+    const { rows } = req.body;
+    if (!Array.isArray(rows) || rows.length === 0) {
+      res.status(400).json({ error: "Geçerli satır dizisi gerekli" }); return;
+    }
+    if (rows.length > 5000) {
+      res.status(400).json({ error: "En fazla 5000 satır içe aktarılabilir" }); return;
+    }
+
+    const isPrivileged = role === "superadmin" || role === "admin";
+
+    // Standard users without a unitId cannot import (no scope to write into)
+    if (!isPrivileged && sessionUnitId === null) {
+      res.status(403).json({ error: "Birim yetkisi olmayan kullanıcılar toplu içe aktarma yapamaz" }); return;
+    }
+
+    // Load lookup data
+    const allVariables = await db.select().from(variablesTable)
+      .where(eq(variablesTable.companyId, sessionCompanyId));
+    const allUnits = await db.select().from(unitsTable)
+      .where(eq(unitsTable.companyId, sessionCompanyId));
+    const allSubUnits = await db.select().from(subUnitsTable);
+
+    let imported = 0;
+    const errors: { row: number; message: string }[] = [];
+
+    for (const [i, row] of rows.entries()) {
+      const rowNum = i + 1;
+      try {
+        // Resolve variable
+        const varName = String(row.variable_name ?? row.variableName ?? "").trim();
+        if (!varName) {
+          errors.push({ row: rowNum, message: "Değişken adı boş olamaz" }); continue;
+        }
+        const variable = allVariables.find(v =>
+          v.name.toLowerCase().trim() === varName.toLowerCase() && v.isActive
+        );
+        if (!variable) {
+          errors.push({ row: rowNum, message: `Değişken bulunamadı veya pasif: "${varName}"` }); continue;
+        }
+        if (variable.isSystemVariable) {
+          errors.push({ row: rowNum, message: `"${varName}" bir sistem değişkenidir; içe aktarılamaz` }); continue;
+        }
+
+        // year / month validation
+        const year = parseInt(String(row.year ?? ""));
+        const month = parseInt(String(row.month ?? ""));
+        if (!year || year < 2000 || year > 2100) {
+          errors.push({ row: rowNum, message: `Geçersiz yıl: ${row.year}` }); continue;
+        }
+        if (!month || month < 1 || month > 12) {
+          errors.push({ row: rowNum, message: `Geçersiz ay (1-12): ${row.month}` }); continue;
+        }
+
+        // value validation
+        const numericValue = parseFloat(String(row.value ?? ""));
+        if (isNaN(numericValue)) {
+          errors.push({ row: rowNum, message: `Geçersiz değer: "${row.value}"` }); continue;
+        }
+
+        // Build period dates
+        const mm = String(month).padStart(2, "0");
+        const lastDay = new Date(year, month, 0).getDate();
+        const periodStart = `${year}-${mm}-01`;
+        const periodEnd = `${year}-${mm}-${String(lastDay).padStart(2, "0")}`;
+
+        // Resolve unit
+        let resolvedUnitId: number | null = null;
+        const unitNameRaw = String(row.unit_name ?? row.unitName ?? "").trim();
+        if (unitNameRaw) {
+          const unit = allUnits.find(u => u.name.toLowerCase().trim() === unitNameRaw.toLowerCase());
+          if (!unit) {
+            errors.push({ row: rowNum, message: `Birim bulunamadı: "${unitNameRaw}"` }); continue;
+          }
+          if (!isPrivileged && sessionUnitId !== null && unit.id !== sessionUnitId) {
+            errors.push({ row: rowNum, message: `Bu birim için yetkiniz yok: "${unitNameRaw}"` }); continue;
+          }
+          resolvedUnitId = unit.id;
+        } else if (!isPrivileged && sessionUnitId !== null) {
+          resolvedUnitId = sessionUnitId;
+        }
+
+        // Resolve sub_unit
+        let resolvedSubUnitId: number | null = null;
+        const subUnitNameRaw = String(row.sub_unit_name ?? row.subUnitName ?? "").trim();
+        if (subUnitNameRaw) {
+          const candidates = resolvedUnitId
+            ? allSubUnits.filter(s => s.unitId === resolvedUnitId)
+            : allSubUnits.filter(s => allUnits.some(u => u.id === s.unitId));
+          const sub = candidates.find(s => s.name.toLowerCase().trim() === subUnitNameRaw.toLowerCase());
+          if (!sub) {
+            errors.push({ row: rowNum, message: `Alt birim bulunamadı: "${subUnitNameRaw}"` }); continue;
+          }
+          resolvedSubUnitId = sub.id;
+        }
+
+        // Scope validation (matches single-create rules)
+        const scope = variable.scopeType;
+        if (scope === "company" && (resolvedUnitId || resolvedSubUnitId)) {
+          errors.push({ row: rowNum, message: `"${varName}" şirket kapsamlı; birim/alt birim belirtilemez` }); continue;
+        }
+        if (scope === "unit" && !resolvedUnitId) {
+          errors.push({ row: rowNum, message: `"${varName}" birim kapsamlı; unit_name zorunlu` }); continue;
+        }
+        if (scope === "sub_unit" && (!resolvedUnitId || !resolvedSubUnitId)) {
+          errors.push({ row: rowNum, message: `"${varName}" alt birim kapsamlı; unit_name ve sub_unit_name zorunlu` }); continue;
+        }
+        if (scope === "meter") {
+          errors.push({ row: rowNum, message: `"${varName}" sayaç kapsamlı; Excel import ile sayaç seçimi desteklenmiyor, manuel giriş yapın` }); continue;
+        }
+
+        // Duplicate check — skip (consistent with consumption batch)
+        const dupConditions = [
+          eq(variableValuesTable.companyId, sessionCompanyId),
+          eq(variableValuesTable.variableId, variable.id),
+          eq(variableValuesTable.periodStart, periodStart),
+          eq(variableValuesTable.periodEnd, periodEnd),
+          resolvedUnitId ? eq(variableValuesTable.unitId, resolvedUnitId) : isNull(variableValuesTable.unitId),
+          resolvedSubUnitId ? eq(variableValuesTable.subUnitId, resolvedSubUnitId) : isNull(variableValuesTable.subUnitId),
+          isNull(variableValuesTable.meterId),
+        ];
+        const [dup] = await db.select({ id: variableValuesTable.id })
+          .from(variableValuesTable)
+          .where(and(...dupConditions));
+        if (dup) {
+          errors.push({ row: rowNum, message: `"${varName}" için ${year}/${month} kaydı zaten mevcut (atlandı)` }); continue;
+        }
+
+        await db.insert(variableValuesTable).values({
+          companyId: sessionCompanyId,
+          variableId: variable.id,
+          unitId: resolvedUnitId,
+          subUnitId: resolvedSubUnitId,
+          meterId: null,
+          periodStart,
+          periodEnd,
+          periodType: "monthly",
+          value: numericValue,
+          source: String(row.note ?? row.source ?? "").trim() || null,
+          locationProvince: null,
+          locationDistrict: null,
+          dataQuality: null,
+        });
+        imported++;
+      } catch (rowErr: any) {
+        errors.push({ row: rowNum, message: rowErr?.message ?? "Bilinmeyen hata" });
+      }
+    }
+
+    res.json({ imported, total: rows.length, errors });
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Sunucu hatası" });
+  }
+});
+
 // ── Weather Degree Days ───────────────────────────────────
 
 // GET /api/weather-degree-days

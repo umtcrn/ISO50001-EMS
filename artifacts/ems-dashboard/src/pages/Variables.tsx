@@ -13,8 +13,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Pencil, Trash2, Variable, BarChart3 } from "lucide-react";
+import { Plus, Pencil, Trash2, Variable, BarChart3, Download, Upload, FileSpreadsheet, FileText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import * as XLSX from "xlsx";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import VariableValueImport from "@/components/VariableValueImport";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -373,6 +376,7 @@ function ValuesTab() {
   const queryClient = useQueryClient();
 
   const [open, setOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState({ ...EMPTY_VAL_FORM });
   const [filterVar, setFilterVar] = useState("all");
@@ -452,6 +456,54 @@ function ValuesTab() {
     (scopeType === "sub_unit" && (!form.unitId || !form.subUnitId)) ||
     (scopeType === "meter"    && (!form.unitId || !form.subUnitId || !form.meterId));
 
+  function handleExportExcel() {
+    const rows = (values ?? []).map(v => ({
+      "Değişken": v.variableName ?? "",
+      "Kod": v.variableCode ?? "",
+      "Birim": v.unitName ?? "Şirket",
+      "Alt Birim": v.subUnitName ?? "",
+      "Sayaç": v.meterName ?? "",
+      "Dönem Başlangıç": v.periodStart,
+      "Dönem Bitiş": v.periodEnd,
+      "Dönem Tipi": v.periodType,
+      "Değer": v.value,
+      "Birim Etiketi": v.variableUnitLabel ?? "",
+      "Veri Kalitesi": v.dataQuality ?? "",
+      "Kaynak": (v as any).source ?? "",
+    }));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Değişken Değerleri");
+    XLSX.writeFile(wb, "degisken_degerleri.xlsx");
+  }
+
+  function handleExportCsv() {
+    const rows = (values ?? []).map(v => ({
+      "Değişken": v.variableName ?? "",
+      "Kod": v.variableCode ?? "",
+      "Birim": v.unitName ?? "Şirket",
+      "Alt Birim": v.subUnitName ?? "",
+      "Dönem Başlangıç": v.periodStart,
+      "Dönem Bitiş": v.periodEnd,
+      "Değer": v.value,
+      "Birim Etiketi": v.variableUnitLabel ?? "",
+    }));
+    if (rows.length === 0) return;
+    const headers = Object.keys(rows[0]);
+    const lines = [
+      headers.join(";"),
+      ...rows.map(row => headers.map(h => {
+        const s = String((row as any)[h] ?? "");
+        return s.includes(";") || s.includes('"') ? `"${s.replace(/"/g, '""')}"` : s;
+      }).join(";")),
+    ];
+    const blob = new Blob(["\uFEFF" + lines.join("\r\n")], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = "degisken_degerleri.csv"; a.click();
+    URL.revokeObjectURL(url);
+  }
+
   const openAdd = () => { setForm({ ...EMPTY_VAL_FORM }); setEditingId(null); setOpen(true); };
   const openEdit = (v: VariableValue) => {
     setForm({
@@ -482,12 +534,32 @@ function ValuesTab() {
             {(variables ?? []).map(v => <SelectItem key={v.id} value={String(v.id)}>{v.name}</SelectItem>)}
           </SelectContent>
         </Select>
-        <div className="ml-auto">
+        <div className="ml-auto flex gap-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="gap-2" disabled={(values ?? []).length === 0}>
+                <Download className="h-4 w-4" /> Dışa Aktar
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={handleExportExcel} className="gap-2 cursor-pointer">
+                <FileSpreadsheet className="h-4 w-4 text-emerald-400" /> Excel (.xlsx)
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleExportCsv} className="gap-2 cursor-pointer">
+                <FileText className="h-4 w-4 text-blue-400" /> CSV (.csv)
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <Button variant="outline" size="sm" onClick={() => setImportOpen(true)} className="gap-2">
+            <Upload className="h-4 w-4" /> Toplu İçe Aktar
+          </Button>
           <Button onClick={openAdd} size="sm" className="bg-teal-600 hover:bg-teal-700">
             <Plus className="h-4 w-4 mr-1" /> Değer Gir
           </Button>
         </div>
       </div>
+
+      <VariableValueImport open={importOpen} onOpenChange={setImportOpen} />
 
       <Card className="bg-card border-border">
         <CardContent className="p-0">

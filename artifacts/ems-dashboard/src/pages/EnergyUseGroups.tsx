@@ -9,10 +9,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
-import { Plus, Pencil, Layers, Power, PowerOff } from "lucide-react";
+import { Plus, Pencil, Layers, Power, PowerOff, Download, Upload, FileSpreadsheet, FileText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import * as XLSX from "xlsx";
+import EnergyUseGroupImport from "@/components/EnergyUseGroupImport";
 
 interface SubUnit { id: number; name: string; }
 interface EnergySource { id: number; name: string; type: string; }
@@ -49,6 +52,7 @@ export default function EnergyUseGroups() {
   const isPrivileged = user?.role === "superadmin" || user?.role === "admin";
 
   const [open, setOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState<GroupForm>(EMPTY_FORM);
   const [filterUnit, setFilterUnit] = useState("all");
@@ -147,6 +151,66 @@ export default function EnergyUseGroups() {
     setForm(f => ({ ...f, unitId: v === "none" ? "" : v, subUnitId: "" }));
   }
 
+  async function handleExportExcel() {
+    try {
+      const p = new URLSearchParams();
+      if (filterActive !== "all") p.set("isActive", filterActive);
+      if (isPrivileged && filterUnit !== "all") p.set("unitId", filterUnit);
+      if (filterSource !== "all") p.set("energySourceId", filterSource);
+      if (companyId) p.set("companyId", companyId.toString());
+      const res = await fetch(`/api/energy-use-groups/export?${p}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      const data = await res.json();
+      if (!res.ok) { toast({ title: data.error ?? "Dışa aktarma başarısız", variant: "destructive" }); return; }
+      const rows = data.map((g: any) => ({
+        "Birim": g.unitName ?? "",
+        "Alt Birim": g.subUnitName ?? "",
+        "Enerji Kaynağı": g.energySourceName ?? "",
+        "Grup Adı": g.name,
+        "Kod": g.code ?? "",
+        "Açıklama": g.description ?? "",
+        "Aktif": g.isActive ? "Evet" : "Hayır",
+      }));
+      const ws = XLSX.utils.json_to_sheet(rows);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Enerji Kullanım Grupları");
+      XLSX.writeFile(wb, "enerji_kullanim_gruplari.xlsx");
+    } catch {
+      toast({ title: "Dışa aktarma hatası", variant: "destructive" });
+    }
+  }
+
+  async function handleExportCsv() {
+    try {
+      const p = new URLSearchParams();
+      if (filterActive !== "all") p.set("isActive", filterActive);
+      if (isPrivileged && filterUnit !== "all") p.set("unitId", filterUnit);
+      if (filterSource !== "all") p.set("energySourceId", filterSource);
+      if (companyId) p.set("companyId", companyId.toString());
+      const res = await fetch(`/api/energy-use-groups/export?${p}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      const data = await res.json();
+      if (!res.ok) { toast({ title: data.error ?? "Dışa aktarma başarısız", variant: "destructive" }); return; }
+      const headers = ["Birim", "Alt Birim", "Enerji Kaynağı", "Grup Adı", "Kod", "Açıklama", "Aktif"];
+      const lines = [
+        headers.join(";"),
+        ...data.map((g: any) => [
+          g.unitName ?? "", g.subUnitName ?? "", g.energySourceName ?? "",
+          g.name, g.code ?? "", g.description ?? "", g.isActive ? "Evet" : "Hayır",
+        ].map(v => { const s = String(v ?? ""); return s.includes(";") || s.includes('"') ? `"${s.replace(/"/g, '""')}"` : s; }).join(";")),
+      ];
+      const blob = new Blob(["\uFEFF" + lines.join("\r\n")], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = "enerji_kullanim_gruplari.csv"; a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      toast({ title: "Dışa aktarma hatası", variant: "destructive" });
+    }
+  }
+
   const displayedGroups = groups ?? [];
 
   return (
@@ -156,9 +220,29 @@ export default function EnergyUseGroups() {
           <h1 className="text-2xl font-bold">Enerji Kullanım Grupları</h1>
           <p className="text-sm text-muted-foreground mt-1">ISO 50001 analizi için enerji kullanım gruplarını yönetin</p>
         </div>
-        <Button onClick={openCreate} className="gap-2">
-          <Plus className="h-4 w-4" /> Yeni Grup
-        </Button>
+        <div className="flex gap-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="gap-2" disabled={displayedGroups.length === 0}>
+                <Download className="h-4 w-4" /> Dışa Aktar
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={handleExportExcel} className="gap-2 cursor-pointer">
+                <FileSpreadsheet className="h-4 w-4 text-emerald-400" /> Excel (.xlsx)
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleExportCsv} className="gap-2 cursor-pointer">
+                <FileText className="h-4 w-4 text-blue-400" /> CSV (.csv)
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <Button variant="outline" onClick={() => setImportOpen(true)} className="gap-2">
+            <Upload className="h-4 w-4" /> Toplu İçe Aktar
+          </Button>
+          <Button onClick={openCreate} className="gap-2">
+            <Plus className="h-4 w-4" /> Yeni Grup
+          </Button>
+        </div>
       </div>
 
       {/* Filtreler */}
@@ -269,6 +353,8 @@ export default function EnergyUseGroups() {
           ))}
         </div>
       )}
+
+      <EnergyUseGroupImport open={importOpen} onOpenChange={setImportOpen} />
 
       {/* Oluştur / Düzenle Dialogu */}
       <Dialog open={open} onOpenChange={setOpen}>
